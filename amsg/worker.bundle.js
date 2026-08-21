@@ -3,7 +3,7 @@
 // worker/amsg/src/index.ts
 import { DurableObject } from "cloudflare:workers";
 
-// node_modules/.pnpm/@rei-standard+amsg-server@2.6.0-next.23_@neondatabase+serverless@1.1.0_pg@8.22.0/node_modules/@rei-standard/amsg-server/dist/chunk-GN44PST5.mjs
+// node_modules/.pnpm/@rei-standard+amsg-server@2_c57770165a8a2256e4acaa4bae2ba803/node_modules/@rei-standard/amsg-server/dist/chunk-GN44PST5.mjs
 var UPDATABLE_COLUMNS = /* @__PURE__ */ new Set([
   "user_id",
   "uuid",
@@ -1121,7 +1121,7 @@ function stringifyDecisionForError(value) {
   }
 }
 
-// node_modules/.pnpm/@rei-standard+amsg-server@2.6.0-next.23_@neondatabase+serverless@1.1.0_pg@8.22.0/node_modules/@rei-standard/amsg-server/dist/chunk-3JEWYDM4.mjs
+// node_modules/.pnpm/@rei-standard+amsg-server@2_c57770165a8a2256e4acaa4bae2ba803/node_modules/@rei-standard/amsg-server/dist/chunk-3JEWYDM4.mjs
 var DAY_MS = 24 * 60 * 60 * 1e3;
 var MAX_LISTED_SKIPPED_OCCURRENCES = 32;
 var MAX_ADJUST_STEPS = 32;
@@ -8758,7 +8758,17 @@ var handleInstantChat = async (args) => {
 
 // worker/amsg/src/selfUpdate.ts
 var CF_API = "https://api.cloudflare.com/client/v4";
-var BUNDLE_URL = "https://raw.githubusercontent.com/Tosd0/sullyos-workers/main/amsg/worker.bundle.js";
+var BUNDLE_URL = (
+  // 指向**自己的** fork，而不是上游 Tosd0/sullyos-workers。
+  //
+  // 原因：这个 fork 的 worker 打了补丁（sanitize.ts 不再丢掉只含发图指令的整行，
+  // 否则开着即时对话时角色永远发不出图）。若仍指向上游，设置页那个「更新 Worker」
+  // 按钮会**静默地把补丁覆盖掉**，而且表现只是「图又不出来了」，极难联想到是它。
+  //
+  // 指向自己的 fork 之后：要么拉到的是带补丁的版本，要么（还没上传时）干脆 404 报错——
+  // 响亮地失败，好过悄悄回退。
+  "https://raw.githubusercontent.com/chidori-beni/sullyos-workers/main/amsg/worker.bundle.js"
+);
 var MAIN_MODULE = "worker.bundle.js";
 var FALLBACK_COMPATIBILITY_DATE = "2026-01-01";
 var FALLBACK_COMPATIBILITY_FLAGS = ["global_fetch_strictly_public"];
@@ -11372,6 +11382,7 @@ var stripRoleNamePrefix = (t) => t.replace(/^[\w一-龥]+:\s*/, "");
 var stripBusinessTagsForBubble = (t) => t.replace(/\[\[(?:ACTION|RECALL|SEARCH|DIARY|READ_DIARY|FS_DIARY|FS_READ_DIARY|DIARY_START|DIARY_END|FS_DIARY_START|FS_DIARY_END|MUSIC_ACTION)[:\s][\s\S]*?\]\]/g, "").replace(/\[\[\s*[记記][录錄]\s*[:：][\s\S]*?\]\]/g, "").replace(/\[schedule_message[^\]]*\]/g, "");
 var stripBusinessTagsForNotification = (t) => stripBusinessTagsForBubble(t).replace(/\[\[(?:READ_NOTE|XHS_[A-Z_]+|LIFE|NEWS_CARD)[:\s][\s\S]*?\]\]/g, "").replace(/\[\[XHS_[A-Z_]+\]\]/g, "");
 var stripAllDoubleBracketTags = (t) => t.replace(/\[\[[\s\S]*?\]\]/g, "");
+var MEDIA_TAG_RE = /\[\[SEND_(?:IMAGE|SELFIE)[:：]/i;
 var stripQuotes2 = (t) => t.replace(/\[\[(?:QU[OA]TE|引用)[：:][\s\S]*?\]\]/g, "").replace(/\[(?:QU[OA]TE|引用)[：:][^\]]*\]/g, "").replace(/\[回复\s*[""“][^""”]*?[""”](?:\.{0,3})\]\s*[：:]?\s*/g, "").replace(/\[[^\[\]\n「」]{0,24}引用了[^\[\]\n「」]{0,24}「[^」\n]*?」[^\[\]\n]{0,24}\]\s*/g, "");
 var stripSystemLogLeak = (t) => t.replace(/[\[【]\s*(?:系统|系統|System)\s*(?:提示)?\s*[:：][^\[\]【】]*[\]】]\s*/gi, "").replace(/\[\s*(?:系统|系統)\s*\]\s*/g, "");
 var stripMarkdownHeaders = (t) => t.replace(/^#{1,6}\s+/gm, "");
@@ -11595,7 +11606,15 @@ ${ATOM_MARKER}B${idx}${ATOM_MARKER}
 `;
         continue;
       }
-      if (!stripAllDoubleBracketTags(sanitized).trim()) continue;
+      if (!stripAllDoubleBracketTags(sanitized).trim()) {
+        if (MEDIA_TAG_RE.test(rawText)) {
+          if (segments.length > 0) segments[segments.length - 1].raw += `
+${rawText}`;
+          else pendingQuoteRaw += `${rawText}
+`;
+        }
+        continue;
+      }
       segments.push({
         raw: pendingQuoteRaw ? `${pendingQuoteRaw}${rawText}` : rawText,
         sanitized
