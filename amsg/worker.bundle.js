@@ -7935,6 +7935,7 @@ var extractFireScheduleTextCalls = (content) => {
 // utils/amsgChatPresence.ts
 var AMSG_CHAT_PRESENCE_KEY = "chat_presence";
 var CHAT_PRESENCE_TTL_MS = 45e3;
+var CHAT_PRESENCE_PUSH_FRESH_MS = 12e3;
 var parseAmsgChatPresence = (raw) => {
   try {
     const value = raw ? JSON.parse(raw) : null;
@@ -7943,6 +7944,9 @@ var parseAmsgChatPresence = (raw) => {
     return null;
   }
 };
+var isForegroundForPush = (value, charId, nowMs) => Boolean(
+  value && value.v === 1 && value.charId === charId && value.activeAt > 0 && value.activeAt <= nowMs + 1e4 && nowMs - value.activeAt <= CHAT_PRESENCE_PUSH_FRESH_MS
+);
 var isFreshChatPresence = (value, charId, nowMs) => Boolean(
   value && value.v === 1 && value.charId === charId && value.activeAt <= nowMs + 1e4 && nowMs - value.activeAt <= CHAT_PRESENCE_TTL_MS
 );
@@ -13264,7 +13268,7 @@ var amsgHooks = {
         const value = parseAmsgChatPresence(
           latest.find((r) => r.key === AMSG_CHAT_PRESENCE_KEY)?.value
         );
-        return isFreshChatPresence(value, charId, Date.now());
+        return isForegroundForPush(value, charId, Date.now());
       },
       // 下面即时对话那一支起跑（要等请求消息拼完才知道给评估喂什么）。
       emotionEvalPromise: null,
@@ -13934,6 +13938,9 @@ var src_default = {
           // 都可能是同一个号。有了它，`GET /config-check` 一次请求就能断定
           // Cloudflare 上跑的到底是不是打了这个补丁的 bundle，不用再靠实机试。
           foregroundSilentPush: true,
+          // 判定「人还在前台」用的窗口（毫秒）。回显出来是为了能一眼看出跑的是哪一版：
+          // 早期那版直接用 45s 的 TTL，导致「发完就切后台」的回复被当成前台、不发通知。
+          foregroundPushWindowMs: CHAT_PRESENCE_PUSH_FRESH_MS,
           workerVersion: AMSG_BUNDLE_VERSION
         }
       });
