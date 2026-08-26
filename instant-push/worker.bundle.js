@@ -2822,6 +2822,14 @@ var DATA_TAGS = [
   }
 ];
 var SIDE_EFFECT_TAGS = [
+  // [[MEET_INVITE: invitation]] - render a clickable meeting card on the client.
+  {
+    re: /\[\[MEET_INVITE:\s*([^\]]{1,240})\]\]/gi,
+    toDirective: (m) => {
+      const invitation = m[1].trim();
+      return invitation ? { type: "meeting_invite", invitation } : null;
+    }
+  },
   // [[ACTION:POKE]]
   {
     re: /\[\[ACTION:POKE\]\]/g,
