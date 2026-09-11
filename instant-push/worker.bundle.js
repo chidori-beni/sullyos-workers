@@ -2323,15 +2323,88 @@ var SSE_ENCODER2 = new TextEncoder();
 var SSE_KEEPALIVE_BYTES2 = SSE_ENCODER2.encode(": keepalive\n\n");
 var SSE_DONE_BYTES2 = SSE_ENCODER2.encode("event: done\ndata: {}\n\n");
 
+// utils/assistantActionFormat.ts
+var normalizeAssistantEmojiFormatting = (raw) => {
+  let content = raw || "";
+  content = content.replace(
+    /(^|[^\[])\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gim,
+    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
+  );
+  content = content.replace(
+    /(^|[^\[])\[\s*(?:表情|表情包)\s*[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gm,
+    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
+  );
+  return content;
+};
+
 // utils/sanitize.ts
 var stripLiteralBackslashN = (t) => t.replace(/\\n/g, "\n");
+var INTERNAL_ASSISTANT_PROTOCOL_MARKER_RE = /^[ \t]*---[ \t]*(?:BEGIN|END)[ \t]+REQUIRED[ \t]+REPLY[ \t]+PREFIX[ \t]*---[ \t]*\r?$/gim;
+var stripInternalAssistantProtocolMarkers = (text) => {
+  let matched = false;
+  const cleaned = text.replace(INTERNAL_ASSISTANT_PROTOCOL_MARKER_RE, () => {
+    matched = true;
+    return "";
+  });
+  return matched ? cleaned.trim() : cleaned;
+};
+var XINSHENG_LINE_RE = /^\s*\{\s*"t"\s*:\s*"xinsheng"/i;
+var findXinshengBraceEnd = (s, start) => {
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === "\\") {
+        esc = true;
+        continue;
+      }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+};
+var escapeNewlinesInXinshengBlobs = (t) => {
+  const MARKER_RE = /\{"t"\s*:\s*"xinsheng"/gi;
+  let out = "";
+  let cursor = 0;
+  let m;
+  while ((m = MARKER_RE.exec(t)) !== null) {
+    const start = m.index;
+    const end = findXinshengBraceEnd(t, start);
+    const stop = end === -1 ? t.length : end + 1;
+    out += t.slice(cursor, start) + t.slice(start, stop).replace(/\r\n|\r|\n/g, "\\n");
+    cursor = stop;
+    if (end === -1) break;
+    MARKER_RE.lastIndex = stop;
+  }
+  out += t.slice(cursor);
+  return out;
+};
+var isolateXinshengLines = (t) => escapeNewlinesInXinshengBlobs(t).replace(/\}\s*,?\s*\{"t":/g, '}\n{"t":').replace(/([^\n{])\s*(\{"t"\s*:\s*"xinsheng")/gi, "$1\n$2");
+var stripXinshengLines = (t) => isolateXinshengLines(t).split("\n").filter((line) => !XINSHENG_LINE_RE.test(line)).join("\n");
 var stripSourceTags = (t) => t.replace(/\s*\[(?:聊天|通话|约会)\]\s*/g, "\n");
+var stripFaceToFacePhoneSourceTags = (t) => t.replace(/\s*[`'“”]*\s*(?:\[\s*面对面手机消息\s*\]|【\s*面对面手机消息\s*】|⟦\s*SRC\s*:\s*FACE[_ -]?PHONE\s*⟧|<\s*SOURCE\s*:\s*FACE[_ -]?TO[_ -]?FACE[_ -]?PHONE\s*>|<\s*FACE[_ -]?TO[_ -]?FACE[_ -]?PHONE\s*>)[`'“”]*\s*/giu, "\n").replace(/\s*面对面期间的手机消息（只读来源）\s*/gu, "\n");
 var stripTimestamps = (t) => t.replace(/\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s*/g, "").replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s*/gm, "").replace(/（[上下]午\d{1,2}[：:]\d{2}）/g, "").replace(/\(\d{1,2}:\d{2}\s*[AP]M\)/gi, "");
 var stripChineseDate = (t) => t.replace(/\[\d{4}[-/年]\d{1,2}[-/月]\d{1,2}.*?\]/g, "");
 var stripRoleNamePrefix = (t) => t.replace(/^[\w一-龥]+:\s*/, "");
 var stripBusinessTagsForBubble = (t) => t.replace(/\[\[(?:ACTION|RECALL|SEARCH|DIARY|READ_DIARY|FS_DIARY|FS_READ_DIARY|DIARY_START|DIARY_END|FS_DIARY_START|FS_DIARY_END|MUSIC_ACTION)[:\s][\s\S]*?\]\]/g, "").replace(/\[\[\s*[记記][录錄]\s*[:：][\s\S]*?\]\]/g, "").replace(/\[schedule_message[^\]]*\]/g, "");
 var stripBusinessTagsForNotification = (t) => stripBusinessTagsForBubble(t).replace(/\[\[(?:READ_NOTE|XHS_[A-Z_]+|LIFE|NEWS_CARD)[:\s][\s\S]*?\]\]/g, "").replace(/\[\[XHS_[A-Z_]+\]\]/g, "");
 var stripAllDoubleBracketTags = (t) => t.replace(/\[\[[\s\S]*?\]\]/g, "");
+var MEDIA_TAG_RE = /\[\[SEND_(?:IMAGE|SELFIE)[:：]/i;
 var stripQuotes = (t) => t.replace(/\[\[(?:QU[OA]TE|引用)[：:][\s\S]*?\]\]/g, "").replace(/\[(?:QU[OA]TE|引用)[：:][^\]]*\]/g, "").replace(/\[回复\s*[""“][^""”]*?[""”](?:\.{0,3})\]\s*[：:]?\s*/g, "").replace(/\[[^\[\]\n「」]{0,24}引用了[^\[\]\n「」]{0,24}「[^」\n]*?」[^\[\]\n]{0,24}\]\s*/g, "");
 var stripSystemLogLeak = (t) => t.replace(/[\[【]\s*(?:系统|系統|System)\s*(?:提示)?\s*[:：][^\[\]【】]*[\]】]\s*/gi, "").replace(/\[\s*(?:系统|系統)\s*\]\s*/g, "");
 var stripMarkdownHeaders = (t) => t.replace(/^#{1,6}\s+/gm, "");
@@ -2450,9 +2523,11 @@ var extractTranslationOriginal = (t) => {
   return result;
 };
 function sanitizeForNotification(text) {
-  let result = text;
-  result = stripLiteralBackslashN(result);
+  let result = stripLiteralBackslashN(text);
+  result = stripInternalAssistantProtocolMarkers(result);
+  result = normalizeAssistantEmojiFormatting(result);
   result = stripThinkBlocks(result);
+  result = stripXinshengLines(result);
   result = replaceHtmlBlocks(result);
   result = replaceEmojiReverseTag(result);
   result = replaceSendEmoji(result);
@@ -2463,6 +2538,7 @@ function sanitizeForNotification(text) {
   result = stripRoleNamePrefix(result);
   result = stripSystemLogLeak(result);
   result = stripSourceTags(result);
+  result = stripFaceToFacePhoneSourceTags(result);
   result = stripInnerState(result);
   result = stripBusinessTagsForNotification(result);
   result = stripQuotes(result);
@@ -2477,6 +2553,8 @@ function sanitizeForNotification(text) {
 }
 function sanitizeIntoSegments(text) {
   let cleaned = stripLiteralBackslashN(text);
+  cleaned = stripInternalAssistantProtocolMarkers(cleaned);
+  cleaned = normalizeAssistantEmojiFormatting(cleaned);
   cleaned = stripThinkBlocks(cleaned);
   cleaned = normalizeVoiceTags(cleaned);
   cleaned = normalizeTranslationTags(cleaned);
@@ -2520,8 +2598,10 @@ ${ATOM_MARKER}B${idx}${ATOM_MARKER}
   cleaned = stripChineseDate(cleaned);
   cleaned = stripRoleNamePrefix(cleaned);
   cleaned = stripSourceTags(cleaned);
+  cleaned = stripFaceToFacePhoneSourceTags(cleaned);
   cleaned = stripLegacyTrans(cleaned);
   cleaned = stripMarkdownDividers(cleaned);
+  cleaned = isolateXinshengLines(cleaned);
   const rawChunks = chunkText(cleaned);
   const SOLO_RE = new RegExp(`^${ATOM_MARKER}B(\\d+)${ATOM_MARKER}$`);
   const GLOBAL_RE = new RegExp(`${ATOM_MARKER}B(\\d+)${ATOM_MARKER}`, "g");
@@ -2549,13 +2629,28 @@ ${ATOM_MARKER}B${idx}${ATOM_MARKER}
       );
       rawText = rawText.trim();
       if (!rawText) continue;
+      if (XINSHENG_LINE_RE.test(rawText) && rawText.endsWith("}")) {
+        if (segments.length > 0) segments[segments.length - 1].raw += `
+${rawText}`;
+        else pendingQuoteRaw += `${rawText}
+`;
+        continue;
+      }
       const sanitized = sanitizeTextForBanner(rawText).trim();
       if (!sanitized) {
         if (!stripQuotes(rawText).trim()) pendingQuoteRaw += `${rawText}
 `;
         continue;
       }
-      if (!stripAllDoubleBracketTags(sanitized).trim()) continue;
+      if (!stripAllDoubleBracketTags(sanitized).trim()) {
+        if (MEDIA_TAG_RE.test(rawText)) {
+          if (segments.length > 0) segments[segments.length - 1].raw += `
+${rawText}`;
+          else pendingQuoteRaw += `${rawText}
+`;
+        }
+        continue;
+      }
       segments.push({
         raw: pendingQuoteRaw ? `${pendingQuoteRaw}${rawText}` : rawText,
         sanitized
@@ -2764,6 +2859,43 @@ var extractScheduleChangeDirectives = (text) => {
   };
 };
 
+// utils/incomingCallParse.ts
+var CALL_TAG_RE = /\[\[\s*ACTION\s*[:：]\s*CALL\s*(?:[:：|｜]\s*)?([\s\S]*?)\]\]/gu;
+var VIDEO_WORDS = /^(?:video|视频|視頻|视讯|視訊|影片|v)$/iu;
+var VOICE_WORDS = /^(?:voice|audio|语音|語音|电话|電話|通话|通話|a)$/iu;
+var readMode = (field) => {
+  const word = field.trim().replace(/[。．.!！?？，,]+$/u, "");
+  if (VIDEO_WORDS.test(word)) return "video";
+  if (VOICE_WORDS.test(word)) return "voice";
+  return null;
+};
+var parseBody = (body) => {
+  const parts = body.split(/[|｜]/u);
+  const head = parts.length > 1 ? readMode(parts[0]) : null;
+  if (head) {
+    return { mode: head, opening: parts.slice(1).join("|").trim() };
+  }
+  const whole = body.trim();
+  if (!whole) return null;
+  const soloMode = readMode(whole);
+  if (soloMode) return { mode: soloMode, opening: "" };
+  return { mode: "voice", opening: whole };
+};
+var extractCallInvite = (text) => {
+  if (!text || !text.includes("[[")) {
+    return { cleanedText: text ?? "", invite: null, malformedCount: 0 };
+  }
+  let invite = null;
+  let malformedCount = 0;
+  const cleanedText = text.replace(CALL_TAG_RE, (_full, body) => {
+    const parsed = parseBody(String(body ?? ""));
+    if (parsed && !invite) invite = parsed;
+    else if (!parsed) malformedCount += 1;
+    return "";
+  });
+  return { cleanedText, invite, malformedCount };
+};
+
 // worker/instant-push/src/classifier.ts
 var DATA_TAGS = [
   // [[RECALL: 2024-05]] / [[RECALL: 2024年5]]
@@ -2822,12 +2954,24 @@ var DATA_TAGS = [
   }
 ];
 var SIDE_EFFECT_TAGS = [
-  // [[MEET_INVITE: invitation]] - render a clickable meeting card on the client.
+  // [[MEET_INVITE: 邀请内容]] — 客户端落可点击的见面邀请卡。
   {
     re: /\[\[MEET_INVITE:\s*([^\]]{1,240})\]\]/gi,
     toDirective: (m) => {
       const invitation = m[1].trim();
       return invitation ? { type: "meeting_invite", invitation } : null;
+    }
+  },
+  // [[REACT: ❤️ | 用户原话短片段]] / [REACT: ❤️ | 用户原话短片段]
+  // target 可省略，客户端回落到最近一条 user 消息。两种括号都必须消费，
+  // 否则主动消息会把控制标签原样推到聊天气泡里。
+  {
+    re: /(?:\[\[\s*REACT\s*[:：]\s*([^|｜\]\r\n]+?)(?:\s*[|｜]\s*([^\]\r\n]{0,120}?))?\s*\]\]|\[\s*REACT\s*[:：]\s*([^|｜\]\r\n]+?)(?:\s*[|｜]\s*([^\]\r\n]{0,120}?))?\s*\])/giu,
+    toDirective: (m) => {
+      const emoji = (m[1] ?? m[3] ?? "").trim();
+      if (!emoji || emoji.length > 24) return null;
+      const target = (m[1] !== void 0 ? m[2] : m[4])?.trim().slice(0, 80);
+      return { type: "message_reaction", emoji, ...target ? { target } : {} };
     }
   },
   // [[ACTION:POKE]]
@@ -2996,8 +3140,17 @@ function classifyLLMOutput(text) {
   for (const d of scheduleParsed.directives) {
     directives.push({ type: "change_schedule", time: d.startTime, activity: d.activity });
   }
+  const callParsed = extractCallInvite(textAfterSchedule);
+  const textAfterCall = callParsed.cleanedText;
+  if (callParsed.invite) {
+    directives.push({
+      type: "call_invite",
+      mode: callParsed.invite.mode,
+      opening: callParsed.invite.opening
+    });
+  }
   for (const spec of SIDE_EFFECT_TAGS) {
-    const matches = Array.from(textAfterSchedule.matchAll(spec.re));
+    const matches = Array.from(textAfterCall.matchAll(spec.re));
     for (const m of matches) {
       const d = spec.toDirective(m);
       if (d) directives.push(d);
@@ -3014,7 +3167,7 @@ function classifyLLMOutput(text) {
     seenDirectives.add(key);
     dedupedDirectives.push(d);
   }
-  let cleanedText = textAfterSchedule;
+  let cleanedText = textAfterCall;
   for (const spec of DATA_TAGS) cleanedText = cleanedText.replace(spec.re, "");
   for (const spec of SIDE_EFFECT_TAGS) cleanedText = cleanedText.replace(spec.re, "");
   cleanedText = cleanedText.trim();
