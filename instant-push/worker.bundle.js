@@ -2327,6 +2327,14 @@ var SSE_DONE_BYTES2 = SSE_ENCODER2.encode("event: done\ndata: {}\n\n");
 var normalizeAssistantEmojiFormatting = (raw) => {
   let content = raw || "";
   content = content.replace(
+    /\[\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\]\]/gi,
+    (_all, name) => `[[SEND_EMOJI: ${name.trim()}]]`
+  );
+  content = content.replace(
+    /(^|[^\[])\[(?:你|User|用户|System|[\w一-龥]+)\s*发送了表情包[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gm,
+    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
+  );
+  content = content.replace(
     /(^|[^\[])\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gim,
     (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
   );

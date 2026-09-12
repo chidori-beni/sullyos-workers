@@ -9655,6 +9655,7 @@ var DEV_DEBUG_STORAGE_KEY = "sullyos.devDebug.flags.v1";
 var DEV_DEBUG_LOG_STORAGE_KEY = "sullyos.devDebug.log.v1";
 var DEV_DEBUG_LOG_EVENT = "sullyos-dev-debug-log-change";
 var DEFAULT_DEV_DEBUG_FLAGS = {
+  sarExpressionReview: false,
   skipPromptBuild: false,
   skipEmotionEval: false,
   mergeSystemMessages: false,
@@ -9696,6 +9697,7 @@ function normalizeFlags(value) {
   const legacyHasCapture = !("captureEnabled" in source) && captureLogs.length > 0;
   return {
     skipPromptBuild: source.skipPromptBuild === true,
+    sarExpressionReview: source.sarExpressionReview === true,
     skipEmotionEval: source.skipEmotionEval === true,
     mergeSystemMessages: source.mergeSystemMessages === true,
     captureEnabled: source.captureEnabled === true || legacyHasCapture,
@@ -13261,6 +13263,14 @@ var SSE_DONE_BYTES = SSE_ENCODER.encode("event: done\ndata: {}\n\n");
 // utils/assistantActionFormat.ts
 var normalizeAssistantEmojiFormatting = (raw) => {
   let content = raw || "";
+  content = content.replace(
+    /\[\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\]\]/gi,
+    (_all, name) => `[[SEND_EMOJI: ${name.trim()}]]`
+  );
+  content = content.replace(
+    /(^|[^\[])\[(?:你|User|用户|System|[\w一-龥]+)\s*发送了表情包[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gm,
+    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
+  );
   content = content.replace(
     /(^|[^\[])\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gim,
     (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
