@@ -2325,24 +2325,15 @@ var SSE_DONE_BYTES2 = SSE_ENCODER2.encode("event: done\ndata: {}\n\n");
 
 // utils/assistantActionFormat.ts
 var normalizeAssistantEmojiFormatting = (raw) => {
-  let content = raw || "";
-  content = content.replace(
-    /\[\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\]\]/gi,
-    (_all, name) => `[[SEND_EMOJI: ${name.trim()}]]`
-  );
-  content = content.replace(
-    /(^|[^\[])\[(?:你|User|用户|System|[\w一-龥]+)\s*发送了表情包[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gm,
-    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
-  );
-  content = content.replace(
-    /(^|[^\[])\[\s*SEND_EMOJI\s*[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gim,
-    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
-  );
-  content = content.replace(
-    /(^|[^\[])\[\s*(?:表情|表情包)\s*[:：]\s*([^\]\r\n]+?)\s*\](?!\])/gm,
-    (_all, prefix, name) => `${prefix}[[SEND_EMOJI: ${name.trim()}]]`
-  );
-  return content;
+  const closing = { "[[": "]]", "[": "]", "\u3010": "\u3011", "\uFF3B\uFF3B": "\uFF3D\uFF3D", "\uFF3B": "\uFF3D" };
+  const openers = /* @__PURE__ */ new Set(["[", "\u3010", "\uFF3B"]);
+  return (raw || "").split(/(```[\s\S]*?```|`[^`\r\n]*`)/g).map((part, index) => index % 2 ? part : part.replace(
+    /(\[\[|\[|【|［［|［)\s*(?:SEND_EMOJI|(?:[^\[\]【】［］\r\n:：]{1,40}?\s*)?发送了表情包|表情包|表情)\s*[:：]\s*([^\[\]【】［］\r\n]+?)\s*(\]\]|\]|】|］］|］)(?![\]】］])/gim,
+    (all, open, name, close, offset, whole) => {
+      if (offset > 0 && openers.has(whole[offset - 1])) return all;
+      return closing[open] === close ? "[[SEND_EMOJI: " + name.trim() + "]]" : all;
+    }
+  )).join("");
 };
 
 // utils/sanitize.ts
