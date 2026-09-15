@@ -8117,6 +8117,20 @@ var isScheduleMinuteInInterval = (minuteOfDay, interval) => {
   return minute >= interval.start || minute < interval.end - 24 * 60;
 };
 
+// utils/scheduleTime.ts
+var SCHEDULE_DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+var addScheduleDateKey = (dateKey, days) => {
+  const match = SCHEDULE_DATE_KEY_RE.exec(dateKey.trim());
+  if (!match || !Number.isInteger(days)) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+};
+
 // utils/scheduleSleep.ts
 var SLEEP_BUSY_LEVEL = "sleep";
 var isSleepSlot = (slot) => slot?.busyLevel === SLEEP_BUSY_LEVEL;
@@ -8299,12 +8313,20 @@ var pickSongFromPool = (pool, slotStartTime, today, charId) => {
 };
 
 // utils/amsgFireScene.ts
+var resolveSceneScheduleForDay = (scene, todayKey) => {
+  if (!scene) return null;
+  if (scene.dateKey === todayKey && scene.schedule?.slots?.length) return scene.schedule;
+  const next = scene.nextDay;
+  if (next && next.dateKey === todayKey && next.schedule?.slots?.length) return next.schedule;
+  return null;
+};
 var resolveFireSceneSong = (scene, nowMs, tz) => {
-  if (!scene?.schedule?.slots?.length) return null;
+  if (!scene) return null;
   const wallNow = nowInTimeZone(tz.tzId, new Date(nowMs));
-  if (getLocalDateKey(wallNow) !== scene.dateKey) return null;
+  const schedule = resolveSceneScheduleForDay(scene, getLocalDateKey(wallNow));
+  if (!schedule) return null;
   if (scene.songPool.length === 0) return null;
-  const { current } = resolveScheduleSlots(scene.schedule, wallNow);
+  const { current } = resolveScheduleSlots(schedule, wallNow);
   if (!current || !slotIsListening(current)) return null;
   return pickSongFromPool(
     scene.songPool,
@@ -8314,17 +8336,22 @@ var resolveFireSceneSong = (scene, nowMs, tz) => {
   );
 };
 var resolveFireSceneSleep = (scene, nowMs, tz) => {
-  if (!scene?.schedule?.slots?.length) return null;
+  if (!scene) return null;
   const wallNow = nowInTimeZone(tz.tzId, new Date(nowMs));
-  if (getLocalDateKey(wallNow) !== scene.dateKey) return null;
+  const todayKey = getLocalDateKey(wallNow);
+  const exact = resolveSceneScheduleForDay(scene, todayKey);
+  if (exact) return resolveScheduleSleepState(exact.slots, wallNow);
+  if (!scene.schedule?.slots?.length) return null;
+  if (addScheduleDateKey(scene.dateKey, 1) !== todayKey) return null;
   return resolveScheduleSleepState(scene.schedule.slots, wallNow);
 };
 var renderFireSceneBlock = (scene, nowMs, tz, options) => {
-  if (!scene?.schedule?.slots?.length) return "";
+  if (!scene) return "";
   const wallNow = nowInTimeZone(tz.tzId, new Date(nowMs));
-  if (getLocalDateKey(wallNow) !== scene.dateKey) return "";
+  const schedule = resolveSceneScheduleForDay(scene, getLocalDateKey(wallNow));
+  if (!schedule) return "";
   const scheduleText = buildScheduleInjection(
-    scene.schedule,
+    schedule,
     scene.evolvedNarrative,
     wallNow,
     {
