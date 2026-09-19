@@ -82,7 +82,7 @@ var init_amsgToolPack = __esm({
 });
 
 // utils/mcpFireCore.ts
-var DEFAULT_MAX_TOOL_NAME_LEN, MCP_FIRE_NAME_PREFIX, MCP_FIRE_NAME_BUDGET, sanitizeMcpToolName, withMcpDedupeSuffix, serverSlug, buildMcpNameMap, MCP_RESULT_MAX_CHARS, formatMcpToolResult, stripTextFakedMcpCalls, escapeRegExp2, stripQuotes, positionalKeys, coerceBySchema, splitTopLevel, parseFakedArgs, extractTextFakedMcpCalls, MCP_LATEST_HANDSHAKE_PROTOCOL_VERSION, MCP_SUPPORTED_HANDSHAKE_PROTOCOL_VERSIONS, MCP_REQUEST_TIMEOUT_MS, createMcpSessionState, buildRpcRequest, parseSse, parseResp, readSseResponse, postCore, initializeCore, ensureInitializedCore, isRecord2, resolveLocalSchemaRef, schemaAccepts, normalizeMcpValueBySchema, normalizeMcpToolArguments, targetHost, callMcpToolCore, buildMcpDirectHeaders, filterMcpServersForChar, buildMcpFireTools, buildMcpFireBlock;
+var DEFAULT_MAX_TOOL_NAME_LEN, MCP_FIRE_NAME_PREFIX, MCP_FIRE_NAME_BUDGET, sanitizeMcpToolName, withMcpDedupeSuffix, serverSlug, buildMcpNameMap, MCP_RESULT_MAX_CHARS, formatMcpToolResult, stripTextFakedMcpCalls, escapeRegExp2, stripQuotes, positionalKeys, coerceBySchema, splitTopLevel, parseFakedArgs, extractTextFakedMcpCalls, MCP_LATEST_HANDSHAKE_PROTOCOL_VERSION, MCP_SUPPORTED_HANDSHAKE_PROTOCOL_VERSIONS, MCP_REQUEST_TIMEOUT_MS, createMcpSessionState, buildRpcRequest, parseSse, parseResp, readSseResponse, postCore, initializeCore, ensureInitializedCore, isRecord3, resolveLocalSchemaRef, schemaAccepts, normalizeMcpValueBySchema, normalizeMcpToolArguments, targetHost, callMcpToolCore, buildMcpDirectHeaders, filterMcpServersForChar, buildMcpFireTools, buildMcpFireBlock;
 var init_mcpFireCore = __esm({
   "utils/mcpFireCore.ts"() {
     "use strict";
@@ -440,7 +440,7 @@ var init_mcpFireCore = __esm({
       }
       await session.initPromise;
     };
-    isRecord2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    isRecord3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     resolveLocalSchemaRef = (schema, rootSchema) => {
       const ref = typeof schema?.$ref === "string" ? schema.$ref : "";
       if (!ref.startsWith("#/")) return schema;
@@ -473,17 +473,17 @@ var init_mcpFireCore = __esm({
             break;
           }
         }
-        const decodedMatchesSchema = acceptsObject && isRecord2(normalized) || acceptsArray && Array.isArray(normalized);
+        const decodedMatchesSchema = acceptsObject && isRecord3(normalized) || acceptsArray && Array.isArray(normalized);
         if (!decodedMatchesSchema) normalized = value;
       }
       const alternatives = [...schema?.oneOf || [], ...schema?.anyOf || []];
       if (alternatives.length) {
         const matching = alternatives.find(
-          (item) => isRecord2(normalized) && schemaAccepts(item, "object") || Array.isArray(normalized) && schemaAccepts(item, "array")
+          (item) => isRecord3(normalized) && schemaAccepts(item, "object") || Array.isArray(normalized) && schemaAccepts(item, "array")
         );
         if (matching) normalized = normalizeMcpValueBySchema(normalized, matching, rootSchema, depth + 1);
       }
-      if (isRecord2(normalized) && acceptsObject) {
+      if (isRecord3(normalized) && acceptsObject) {
         const result = { ...normalized };
         const properties = schema?.properties || {};
         for (const [key, childSchema] of Object.entries(properties)) {
@@ -498,7 +498,7 @@ var init_mcpFireCore = __esm({
         }
         for (const item of schema?.allOf || []) {
           const merged = normalizeMcpValueBySchema(result, item, rootSchema, depth + 1);
-          if (isRecord2(merged)) Object.assign(result, merged);
+          if (isRecord3(merged)) Object.assign(result, merged);
         }
         return result;
       }
@@ -9652,6 +9652,230 @@ var dateReplyHandler = {
   }
 };
 
+// utils/amsgStoryJob.ts
+var STORY_BACKGROUND_REPLY_KIND = "story-reply";
+var STORY_BACKGROUND_REPLY_RESULT_KIND = "story-reply";
+var STORY_BACKGROUND_JOB_SCHEMA_VERSION = 1;
+var isRecord2 = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+var isFiniteNumber2 = (value) => typeof value === "number" && Number.isFinite(value);
+var isRole2 = (value) => value === "system" || value === "user" || value === "assistant";
+var isTurnKind = (value) => value === "opening" || value === "advance" || value === "continue" || value === "retry" || value === "reroll";
+var isOperation = (value) => value === "append" || value === "replace";
+var normalizeContent2 = (content) => {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const item = part;
+      return typeof item.text === "string" ? item.text : "";
+    }).filter(Boolean).join("\n");
+  }
+  return content == null ? "" : String(content);
+};
+var normalizeStoryBackgroundMessages = (messages) => messages.filter((message) => isRole2(message?.role)).map((message) => ({ role: message.role, content: normalizeContent2(message.content).trim() })).filter((message) => !!message.content);
+var normalizeAffinityInputs = (value) => {
+  if (!Array.isArray(value)) return void 0;
+  const rows = value.flatMap((item) => {
+    if (!isRecord2(item)) return [];
+    const delta = Math.max(-100, Math.min(100, Math.round(Number(item.delta) || 0)));
+    const reason = String(item.reason || "").trim().slice(0, 200);
+    if (delta === 0 && !reason) return [];
+    return [{
+      ...typeof item.characterId === "string" ? { characterId: item.characterId.slice(0, 200) } : {},
+      ...typeof item.characterName === "string" ? { characterName: item.characterName.slice(0, 200) } : {},
+      delta,
+      reason,
+      awareness: item.awareness === "noticed" ? "noticed" : "unnoticed"
+    }];
+  });
+  return rows.length > 0 ? rows : void 0;
+};
+var normalizeExtraBody = (value) => {
+  if (!isRecord2(value)) return void 0;
+  const extra = {};
+  for (const key of ["top_p", "frequency_penalty", "presence_penalty"]) {
+    if (isFiniteNumber2(value[key])) extra[key] = value[key];
+  }
+  return Object.keys(extra).length > 0 ? extra : void 0;
+};
+var normalizeMirrorTargets = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord2(item) || typeof item.charId !== "string" || !item.charId || !isFiniteNumber2(item.entryCreatedAt)) return [];
+    return [{
+      charId: item.charId,
+      ...isFiniteNumber2(item.anchorAt) ? { anchorAt: item.anchorAt } : {},
+      entryCreatedAt: item.entryCreatedAt
+    }];
+  });
+};
+var normalizeTargetMirrorIds = (value) => {
+  if (!isRecord2(value)) return void 0;
+  const result = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (Number.isInteger(raw) && Number(raw) > 0) result[key] = Number(raw);
+  }
+  return Object.keys(result).length > 0 ? result : void 0;
+};
+var storyBackgroundJobKey = (clientJobId) => `story:${clientJobId}`;
+var parseJobLike = (value, requireMessages = true) => {
+  const raw = typeof value === "string" ? (() => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  })() : value;
+  if (!isRecord2(raw) || raw.v !== STORY_BACKGROUND_JOB_SCHEMA_VERSION || raw.kind !== STORY_BACKGROUND_REPLY_KIND || typeof raw.clientJobId !== "string" || !raw.clientJobId || typeof raw.storyId !== "string" || !raw.storyId || typeof raw.storyTitle !== "string" || typeof raw.threadId !== "string" || !raw.threadId || raw.charId !== raw.threadId || typeof raw.primaryCharId !== "string" || !raw.primaryCharId || typeof raw.primaryCharName !== "string" || !Number.isInteger(raw.markerMessageId) || Number(raw.markerMessageId) <= 0 || !isOperation(raw.operation) || !isTurnKind(raw.turnKind) || !Array.isArray(raw.messages) || requireMessages && raw.messages.length === 0 || typeof raw.assistantPrefill !== "string" || !isFiniteNumber2(raw.promptTokenEstimate) || !isFiniteNumber2(raw.createdAt)) return null;
+  const messages = raw.messages.filter(isRecord2).map((message) => ({
+    role: typeof message.role === "string" ? message.role : void 0,
+    content: message.content
+  }));
+  if (messages.length !== raw.messages.length) return null;
+  const safeMessages = normalizeStoryBackgroundMessages(messages);
+  if (requireMessages && safeMessages.length !== messages.length) return null;
+  const mirrorTargets = normalizeMirrorTargets(raw.mirrorTargets);
+  if (mirrorTargets.length !== (Array.isArray(raw.mirrorTargets) ? raw.mirrorTargets.length : 0)) return null;
+  if (raw.operation === "replace" && (!Number.isInteger(raw.targetAssistantMessageId) || !raw.targetAssistantFingerprint)) return null;
+  return {
+    v: STORY_BACKGROUND_JOB_SCHEMA_VERSION,
+    kind: STORY_BACKGROUND_REPLY_KIND,
+    clientJobId: raw.clientJobId,
+    storyId: raw.storyId,
+    storyTitle: raw.storyTitle,
+    threadId: raw.threadId,
+    charId: raw.threadId,
+    primaryCharId: raw.primaryCharId,
+    primaryCharName: raw.primaryCharName,
+    markerMessageId: raw.markerMessageId,
+    operation: raw.operation,
+    turnKind: raw.turnKind,
+    ...Number.isInteger(raw.sourceUserMessageId) ? { sourceUserMessageId: raw.sourceUserMessageId } : {},
+    ...Number.isInteger(raw.targetAssistantMessageId) ? { targetAssistantMessageId: raw.targetAssistantMessageId } : {},
+    ...Number.isInteger(raw.expectedTailId) ? { expectedTailId: raw.expectedTailId } : {},
+    ...isRole2(raw.expectedTailRole) ? { expectedTailRole: raw.expectedTailRole } : {},
+    ...typeof raw.expectedTailFingerprint === "string" ? { expectedTailFingerprint: raw.expectedTailFingerprint } : {},
+    ...typeof raw.targetAssistantFingerprint === "string" ? { targetAssistantFingerprint: raw.targetAssistantFingerprint } : {},
+    ...normalizeTargetMirrorIds(raw.targetMirrorIds) ? { targetMirrorIds: normalizeTargetMirrorIds(raw.targetMirrorIds) } : {},
+    messages: safeMessages,
+    assistantPrefill: raw.assistantPrefill,
+    promptTokenEstimate: raw.promptTokenEstimate,
+    ...normalizeAffinityInputs(raw.affinityInputs) ? { affinityInputs: normalizeAffinityInputs(raw.affinityInputs) } : {},
+    mirrorTargets,
+    ...isFiniteNumber2(raw.temperature) ? { temperature: raw.temperature } : {},
+    ...Number.isFinite(raw.maxTokens) && Number(raw.maxTokens) > 0 ? { maxTokens: Math.floor(Number(raw.maxTokens)) } : {},
+    ...normalizeExtraBody(raw.extraBody) ? { extraBody: normalizeExtraBody(raw.extraBody) } : {},
+    createdAt: raw.createdAt
+  };
+};
+var parseStoryBackgroundJobInput = (value) => parseJobLike(value);
+var buildStoryBackgroundJobResult = (args) => {
+  const { messages: _messages, ...job } = args.job;
+  return {
+    ...job,
+    resultKind: STORY_BACKGROUND_REPLY_RESULT_KIND,
+    text: args.text,
+    generatedAt: args.generatedAt ?? Date.now()
+  };
+};
+
+// worker/amsg/src/storyFire.ts
+var BACKGROUND_STORY_TIMEOUT_MS = 18e4;
+var discardJob4 = async (writeState, jobId) => {
+  if (!writeState) return;
+  try {
+    await writeState(AMSG_JOB_NAMESPACE, [{ key: storyBackgroundJobKey(jobId), value: null }]);
+  } catch (error) {
+    console.warn("[amsg:story] job \u884C\u6CA1\u5220\u6389\uFF08\u7B49 TTL \u515C\u5E95\uFF09", jobId, error);
+  }
+};
+var readStoryJob = async (ctx, jobId) => {
+  const rows = await ctx.readState(AMSG_JOB_NAMESPACE);
+  const row = rows.find((entry) => entry.key === storyBackgroundJobKey(jobId));
+  if (!row?.value) return null;
+  let json;
+  try {
+    json = await unpackStateValue(row.value);
+  } catch (error) {
+    await discardJob4(ctx.writeState, jobId);
+    throw new Error(`\u5267\u60C5\u540E\u53F0 job ${jobId} \u7684\u8F93\u5165\u89E3\u538B\u5931\u8D25\uFF08\u6570\u636E\u635F\u574F\uFF09\uFF1A${String(error)}`);
+  }
+  const job = parseStoryBackgroundJobInput(json);
+  if (!job) {
+    await discardJob4(ctx.writeState, jobId);
+    throw new Error(`\u5267\u60C5\u540E\u53F0 job ${jobId} \u7684\u8F93\u5165\u89E3\u6790\u5931\u8D25\uFF08\u6570\u636E\u635F\u574F\uFF09`);
+  }
+  if (job.charId !== ctx.task.metadata?.charId) {
+    await discardJob4(ctx.writeState, jobId);
+    throw new Error(`\u5267\u60C5\u540E\u53F0 job ${jobId} \u7684 charId \u4E0E\u4EFB\u52A1\u5BF9\u4E0D\u4E0A`);
+  }
+  return job;
+};
+var previewText3 = (text) => {
+  const singleLine = text.replace(/<think(?:ing|ought)?\b[^>]*>[\s\S]*?<\/think(?:ing|ought)?\s*>/gi, "").replace(/\[\[.*?\]\]/g, "").replace(/\s+/g, " ").trim();
+  return singleLine.length > 88 ? `${singleLine.slice(0, 88)}\u2026` : singleLine;
+};
+var storyReplyHandler = {
+  async beforeFire({ ctx, taskMeta }) {
+    const jobId = taskMeta[AMSG_JOB_ID_KEY];
+    if (typeof jobId !== "string" || !jobId) {
+      throw new Error(`\u5267\u60C5\u540E\u53F0\u4EFB\u52A1\u7684 metadata \u91CC\u6CA1\u6709 ${AMSG_JOB_ID_KEY}`);
+    }
+    const job = await readStoryJob(ctx, jobId);
+    if (!job) return { skip: true, reason: `\u5267\u60C5\u540E\u53F0 job ${jobId} \u7684\u8F93\u5165\u5DF2\u4E0D\u5728\uFF08\u8FC7\u671F\u6216\u5DF2\u64A4\u9500\uFF09` };
+    if (job.kind !== STORY_BACKGROUND_REPLY_KIND) {
+      await discardJob4(ctx.writeState, jobId);
+      throw new Error(`\u5267\u60C5\u540E\u53F0 job ${jobId} \u7684\u4EFB\u52A1\u79CD\u7C7B\u4E0D\u4E00\u81F4`);
+    }
+    return {
+      messages: job.messages,
+      totalTimeoutMs: BACKGROUND_STORY_TIMEOUT_MS,
+      state: { jobId, job }
+    };
+  },
+  async llmOutput({ ctx, state }) {
+    const { jobId, job } = state;
+    const text = stripReasoningTags2(ctx.llmOutputText || "").trim();
+    if (!text) {
+      await discardJob4(ctx.writeState, jobId);
+      return { decision: "skip-push", reason: "story-empty-generation" };
+    }
+    if (typeof ctx.emitResult !== "function") {
+      console.warn("[amsg:story] \u5F53\u524D Worker \u6CA1\u6709 emitResult\uFF0C\u5267\u60C5\u540E\u53F0\u7ED3\u679C\u65E0\u6CD5\u9001\u56DE\u5BA2\u6237\u7AEF", jobId);
+      await discardJob4(ctx.writeState, jobId);
+      return { decision: "skip-push", reason: "story-emit-result-unsupported" };
+    }
+    const result = buildStoryBackgroundJobResult({ job, text, generatedAt: Date.now() });
+    try {
+      await ctx.emitResult({
+        ...result,
+        notification: {
+          show: "when-hidden",
+          title: "\u5267\u60C5\u56DE\u590D\u5DF2\u751F\u6210",
+          body: previewText3(text) || "\u5267\u60C5\u91CC\u6709\u4E86\u65B0\u7684\u56DE\u5E94\u3002",
+          tag: `amsg-story-${job.storyId}-${jobId}`,
+          data: {
+            openApp: "date",
+            surface: "story",
+            storyId: job.storyId,
+            resultKind: result.resultKind,
+            jobId
+          }
+        }
+      });
+    } catch (error) {
+      console.warn("[amsg:story] \u7ED3\u679C\u6CA1\u80FD\u5199\u8FDB\u6536\u4EF6\u7BB1\uFF0C\u672C\u8F6E\u8BA9\u4E0A\u6E38\u91CD\u8BD5", jobId, error);
+      throw error;
+    }
+    await discardJob4(ctx.writeState, jobId);
+    console.log("[amsg:story] \u540E\u53F0\u5267\u60C5\u7ED3\u679C\u5DF2\u9001\u8FDB\u6536\u4EF6\u7BB1", {
+      jobId,
+      storyId: job.storyId
+    });
+    return { decision: "skip-push", reason: "story-result-emitted" };
+  }
+};
+
 // worker/amsg/src/fireKinds.ts
 var FIRE_KIND_HANDLERS = Object.assign(
   /* @__PURE__ */ Object.create(null),
@@ -9659,7 +9883,8 @@ var FIRE_KIND_HANDLERS = Object.assign(
     [PLATE_CONSOLIDATE_KIND]: plateConsolidateHandler,
     [CALL_BACKGROUND_REPLY_KIND]: callReplyHandler,
     [SLEEP_DREAM_KIND]: sleepDreamHandler,
-    [DATE_BACKGROUND_REPLY_KIND]: dateReplyHandler
+    [DATE_BACKGROUND_REPLY_KIND]: dateReplyHandler,
+    [STORY_BACKGROUND_REPLY_KIND]: storyReplyHandler
   }
 );
 var KIND_FIRE_SCRATCH_KEY = "kindFire";
@@ -16262,6 +16487,8 @@ var src_default = {
           // 见面普通回复使用独立的 date-reply handler，必须单独回显能力位；旧 Worker
           // 即使已有通话后台，也不能接收见面 prompt 快照。
           dateBackgroundJobs: true,
+          // 见面·剧情使用自己的线程、镜像和 reroll 闸门，不能与普通见面共用 handler。
+          storyBackgroundJobs: true,
           // 这份代码认不认「前台静默投递」：页面还开着时由 SW 抑制横幅，但仍保留
           // push 让它在真实后台状态下显示。同 backgroundJobs 一个套路——报的是
           // **这份代码有没有**，不是只看版本号。
