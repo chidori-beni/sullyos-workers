@@ -9850,7 +9850,10 @@ var storyReplyHandler = {
       await ctx.emitResult({
         ...result,
         notification: {
-          show: "when-hidden",
+          // 剧情后台生成完成是用户明确等待的结果：无论 PWA 当前是否在前台，
+          // 都要进系统通知栏；前台时静音，避免用户正盯着剧情页却被自己吓一跳。
+          show: "always",
+          silent: "when-visible",
           title: "\u5267\u60C5\u56DE\u590D\u5DF2\u751F\u6210",
           body: previewText3(text) || "\u5267\u60C5\u91CC\u6709\u4E86\u65B0\u7684\u56DE\u5E94\u3002",
           tag: `amsg-story-${job.storyId}-${jobId}`,
