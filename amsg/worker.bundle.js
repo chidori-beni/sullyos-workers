@@ -4,6 +4,48 @@ var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
 
+// utils/localDate.ts
+function getLocalDateKey(date = /* @__PURE__ */ new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function parseLocalDateKey(key) {
+  const match = DATE_KEY_RE.exec(key);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
+  return parsed;
+}
+function addLocalDays(key, amount) {
+  const parsed = parseLocalDateKey(key);
+  if (!parsed) return "";
+  parsed.setDate(parsed.getDate() + amount);
+  return getLocalDateKey(parsed);
+}
+function getCalendarDayDifference(fromKey, toKey) {
+  const fromMatch = DATE_KEY_RE.exec(fromKey);
+  const toMatch = DATE_KEY_RE.exec(toKey);
+  if (!fromMatch || !toMatch || !parseLocalDateKey(fromKey) || !parseLocalDateKey(toKey)) return null;
+  const utcDay = (match) => Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+  return Math.round((utcDay(toMatch) - utcDay(fromMatch)) / 864e5);
+}
+var DATE_KEY_RE;
+var init_localDate = __esm({
+  "utils/localDate.ts"() {
+    "use strict";
+    DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+  }
+});
+
 // utils/proxyWorker.ts
 var DEFAULT_PROXY_WORKER, LS_KEY, STALE_HOSTS, normalize, runtimeOverrideUrl, setProxyWorkerUrlOverride, getProxyWorkerUrl;
 var init_proxyWorker = __esm({
@@ -8005,41 +8047,8 @@ function buildPlateConsolidateResult(args) {
   };
 }
 
-// utils/localDate.ts
-var DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-function getLocalDateKey(date = /* @__PURE__ */ new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-function parseLocalDateKey(key) {
-  const match = DATE_KEY_RE.exec(key);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
-  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
-  return parsed;
-}
-function addLocalDays(key, amount) {
-  const parsed = parseLocalDateKey(key);
-  if (!parsed) return "";
-  parsed.setDate(parsed.getDate() + amount);
-  return getLocalDateKey(parsed);
-}
-function getCalendarDayDifference(fromKey, toKey) {
-  const fromMatch = DATE_KEY_RE.exec(fromKey);
-  const toMatch = DATE_KEY_RE.exec(toKey);
-  if (!fromMatch || !toMatch || !parseLocalDateKey(fromKey) || !parseLocalDateKey(toKey)) return null;
-  const utcDay = (match) => Date.UTC(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3])
-  );
-  return Math.round((utcDay(toMatch) - utcDay(fromMatch)) / 864e5);
-}
+// utils/amsgFireScene.ts
+init_localDate();
 
 // utils/timezone.ts
 var nowInTimeZone = (tz, base = /* @__PURE__ */ new Date()) => {
@@ -8082,6 +8091,9 @@ var wallClockToTimestamp = (wallClockText, tz) => {
   }
   return t;
 };
+
+// utils/scheduleTime.ts
+init_localDate();
 
 // utils/scheduleClock.ts
 var parseScheduleClockTime = (value, allowEndOfDay = false) => {
@@ -8273,6 +8285,7 @@ ${scopeNote}`;
 };
 
 // utils/charMusicSchedule.ts
+init_localDate();
 var LISTENING_KEYWORDS = [
   "\u542C\u6B4C",
   "\u542C\u97F3\u4E50",
@@ -8373,6 +8386,7 @@ ${lines.join("\n")}`;
 };
 
 // utils/calendarIntegration.ts
+init_localDate();
 var taskDateKey = (task) => {
   if (typeof task.deadline === "string" && /^\d{4}-\d{2}-\d{2}$/.test(task.deadline)) {
     return task.deadline;
@@ -8676,6 +8690,7 @@ var buildUserCalendarContext = (params) => {
 };
 
 // utils/amsgUserCalendar.ts
+init_localDate();
 var isUsableTimeZone = (tzId) => {
   if (!tzId) return false;
   try {
@@ -12850,6 +12865,7 @@ var normalizeXhsLiteDetail = (payload, commentLimit = 15) => {
 };
 
 // utils/agenticTools.ts
+init_localDate();
 function resolveXhsConfig(char, realtimeConfig) {
   const mcpConfig = realtimeConfig?.xhsMcpConfig;
   const mcpAvailable = !!(mcpConfig?.enabled && mcpConfig?.serverUrl);
