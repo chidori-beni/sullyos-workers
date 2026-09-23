@@ -10049,9 +10049,9 @@ var DEV_DEBUG_CAPTURE_CATEGORIES = [
     detail: "\u666E\u901A\u804A\u5929\u76F4\u53D1\u6A21\u578B\u7684 chat completions \u8BF7\u6C42\u4E0E\u54CD\u5E94\u3002"
   },
   {
-    key: "instant-push",
-    title: "IP",
-    detail: "Instant Push \u901A\u9053\uFF1A\u7ECF worker \u7684 LLM \u4EA4\u6362 + SSE \u6295\u9012\u7ED3\u679C\uFF08\u8D85\u65F6 / \u6536\u5230 / \u5931\u8D25\uFF09\u3002"
+    key: "amsg",
+    title: "\u4E3B\u52A8\u6D88\u606F",
+    detail: "\u4E3B\u52A8\u6D88\u606F 2.0 \u7684\u6536\u53D1\u94FE\u8DEF\uFF1A\u6536\u4EF6\u7BB1\u51B2\u5237\u3001\u63A8\u9001\u843D\u5E93\u3001\u5373\u65F6\u5BF9\u8BDD\u56DE\u5408\u7684 trace\u3002"
   },
   {
     key: "lifecycle",
@@ -10098,7 +10098,7 @@ function normalizeCaptureLogs(value) {
   if (!Array.isArray(value)) return [];
   const seen = /* @__PURE__ */ new Set();
   for (const item of value) {
-    const migrated = item === "llm" ? "api" : item;
+    const migrated = item === "llm" ? "api" : item === "instant-push" ? "amsg" : item;
     if (CAPTURE_CATEGORY_KEYS.includes(migrated)) {
       seen.add(migrated);
     }
@@ -14250,7 +14250,7 @@ var extractCallInvite = (text) => {
   return { cleanedText, invite, malformedCount };
 };
 
-// worker/instant-push/src/classifier.ts
+// worker/amsg/src/classifier.ts
 var DATA_TAGS = [
   // [[RECALL: 2024-05]] / [[RECALL: 2024年5]]
   {
