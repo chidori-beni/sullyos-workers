@@ -13703,7 +13703,8 @@ function resolveXhsConfig(char, realtimeConfig) {
 async function runRecall(args, ctx) {
   const { char } = ctx;
   const targetMonth = `${args.year}-${args.month.padStart(2, "0")}`;
-  const alreadyActive = !!char.activeMemoryMonths?.includes(targetMonth);
+  const partialWindow = typeof char.recentMemoryDays === "number" && char.recentMemoryDays > 0;
+  const alreadyActive = !partialWindow && !!char.activeMemoryMonths?.includes(targetMonth);
   if (alreadyActive) {
     return { ok: true, alreadyActive: true, yearMonth: targetMonth, logsText: null };
   }
@@ -16030,6 +16031,7 @@ var buildToolCtx = (pack, config) => {
     name: pack.charName,
     xhsEnabled: pack.xhsEnabled,
     activeMemoryMonths: pack.activeMemoryMonths,
+    recentMemoryDays: pack.recentMemoryDays,
     memories: pack.memories
   };
   return {
