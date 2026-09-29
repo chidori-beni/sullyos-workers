@@ -8319,7 +8319,7 @@ function createSingleUserCloudflareWorker(buildConfig, options = {}) {
 }
 
 // utils/amsgBundleVersion.ts
-var AMSG_BUNDLE_VERSION = "2026-09-22";
+var AMSG_BUNDLE_VERSION = "2026-09-29";
 
 // utils/amsgTaskKinds.ts
 var AMSG_TASK_KIND_KEY = "amsgKind";
@@ -12072,17 +12072,17 @@ var isEncryptedEnvelope2 = (value) => {
 var handleInstantChat = async (args) => {
   const { request, env, upstream: upstream2, json } = args;
   const stateBackoffMs = args.stateBackoffMs ?? STATE_FORWARD_BACKOFF_MS;
-  const fail3 = (status, code, message, extra) => json(status, { success: false, error: { code, message, ...extra ?? {} } });
+  const fail4 = (status, code, message, extra) => json(status, { success: false, error: { code, message, ...extra ?? {} } });
   const token = (env.AMSG_SERVER_TOKEN ?? "").trim();
   const clientToken = request.headers.get("X-Client-Token") ?? "";
   if (token) {
     if (!clientToken || !await constantTimeEqual2(clientToken, token)) {
-      return fail3(401, "INVALID_CLIENT_TOKEN", "\u5171\u4EAB\u5BC6\u94A5\u65E0\u6548\u6216\u7F3A\u5931");
+      return fail4(401, "INVALID_CLIENT_TOKEN", "\u5171\u4EAB\u5BC6\u94A5\u65E0\u6548\u6216\u7F3A\u5931");
     }
   }
   const userId = request.headers.get("X-User-Id") ?? "";
-  if (!userId) return fail3(400, "USER_ID_REQUIRED", "\u7F3A\u5C11\u7528\u6237\u6807\u8BC6\u7B26");
-  if (!UUID_V4_RE.test(userId)) return fail3(400, "INVALID_USER_ID_FORMAT", "X-User-Id \u5FC5\u987B\u662F UUID v4 \u683C\u5F0F");
+  if (!userId) return fail4(400, "USER_ID_REQUIRED", "\u7F3A\u5C11\u7528\u6237\u6807\u8BC6\u7B26");
+  if (!UUID_V4_RE.test(userId)) return fail4(400, "INVALID_USER_ID_FORMAT", "X-User-Id \u5FC5\u987B\u662F UUID v4 \u683C\u5F0F");
   let body;
   try {
     const text = await readMaybeGzippedBody(request);
@@ -12090,17 +12090,17 @@ var handleInstantChat = async (args) => {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
     body = parsed;
   } catch {
-    return fail3(400, "INVALID_JSON", "\u8BF7\u6C42\u4F53\u4E0D\u662F\u5408\u6CD5\u7684 JSON \u5BF9\u8C61");
+    return fail4(400, "INVALID_JSON", "\u8BF7\u6C42\u4F53\u4E0D\u662F\u5408\u6CD5\u7684 JSON \u5BF9\u8C61");
   }
   if (!isEncryptedEnvelope2(body.statePayload)) {
-    return fail3(400, "INVALID_STATE_PAYLOAD", "statePayload \u5FC5\u987B\u662F\u52A0\u5BC6\u4FE1\u5C01\uFF08iv / authTag / encryptedData\uFF09");
+    return fail4(400, "INVALID_STATE_PAYLOAD", "statePayload \u5FC5\u987B\u662F\u52A0\u5BC6\u4FE1\u5C01\uFF08iv / authTag / encryptedData\uFF09");
   }
   if (!isEncryptedEnvelope2(body.taskPayload)) {
-    return fail3(400, "INVALID_TASK_PAYLOAD", "taskPayload \u5FC5\u987B\u662F\u52A0\u5BC6\u4FE1\u5C01\uFF08iv / authTag / encryptedData\uFF09");
+    return fail4(400, "INVALID_TASK_PAYLOAD", "taskPayload \u5FC5\u987B\u662F\u52A0\u5BC6\u4FE1\u5C01\uFF08iv / authTag / encryptedData\uFF09");
   }
   const requestUrl = new URL(request.url);
   const mountPath = requestUrl.pathname.replace(/\/+$/, "").replace(/\/instant-chat$/, "");
-  const internalUrl = (path) => {
+  const internalUrl2 = (path) => {
     const url = new URL(request.url);
     url.pathname = `${mountPath}${path}`;
     url.search = "";
@@ -12129,7 +12129,7 @@ var handleInstantChat = async (args) => {
       await sleep(stateBackoffMs[attempt]);
     }
     stateResponse = await upstream2.fetch(
-      new Request(internalUrl("/client-state"), {
+      new Request(internalUrl2("/client-state"), {
         method: "PUT",
         headers: encryptedHeaders,
         body: JSON.stringify(body.statePayload)
@@ -12164,7 +12164,7 @@ var handleInstantChat = async (args) => {
     });
   }
   const taskResponse = await upstream2.fetch(
-    new Request(internalUrl("/schedule-message"), {
+    new Request(internalUrl2("/schedule-message"), {
       method: "POST",
       headers: encryptedHeaders,
       body: JSON.stringify(body.taskPayload)
@@ -12187,7 +12187,7 @@ var handleInstantChat = async (args) => {
   }
   const uuid = taskBody?.data?.uuid;
   if (typeof uuid !== "string" || !uuid) {
-    return fail3(502, "INSTANT_CHAT_TASK_UUID_MISSING", "\u4E0A\u6E38\u6CA1\u6709\u56DE\u4EFB\u52A1 uuid\uFF0C\u65E0\u6CD5\u8DDF\u8E2A\u8FD9\u4E00\u8F6E", {
+    return fail4(502, "INSTANT_CHAT_TASK_UUID_MISSING", "\u4E0A\u6E38\u6CA1\u6709\u56DE\u4EFB\u52A1 uuid\uFF0C\u65E0\u6CD5\u8DDF\u8E2A\u8FD9\u4E00\u8F6E", {
       step: "schedule-message"
     });
   }
@@ -16023,6 +16023,208 @@ var isFcmConfigured = (env) => Boolean(
   env.FCM_PROJECT_ID?.trim() && env.FCM_SERVICE_ACCOUNT_EMAIL?.trim() && env.FCM_SERVICE_ACCOUNT_PRIVATE_KEY?.trim()
 );
 
+// worker/amsg/src/watchRoom.ts
+var WATCH_ROOM_INSTANCE_PREFIX = "watch:";
+var WATCH_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+var WATCH_CODE_LENGTH = 6;
+var WATCH_PAIR_WINDOW_MS = 10 * 60 * 1e3;
+var WATCH_MAX_MESSAGE_CHARS = 15e5;
+var ROOM_KEY = "watchRoom";
+var PLAYER_KEY = "watchPlayer";
+var generateWatchCode = (random = defaultRandom) => {
+  const bytes = random(WATCH_CODE_LENGTH);
+  let out = "";
+  for (let i = 0; i < WATCH_CODE_LENGTH; i += 1) out += WATCH_CODE_ALPHABET[bytes[i] % WATCH_CODE_ALPHABET.length];
+  return out;
+};
+var generateWatchSecret = (random = defaultRandom) => Array.from(random(24), (b) => b.toString(16).padStart(2, "0")).join("");
+var normalizeWatchCode = (raw) => {
+  if (typeof raw !== "string") return null;
+  const code = raw.replace(/[\s-]+/g, "").toUpperCase();
+  if (code.length !== WATCH_CODE_LENGTH) return null;
+  for (const ch of code) if (!WATCH_CODE_ALPHABET.includes(ch)) return null;
+  return code;
+};
+var parseWatchRole = (raw) => raw === "phone" || raw === "screen" ? raw : null;
+function defaultRandom(n) {
+  const bytes = new Uint8Array(n);
+  crypto.getRandomValues(bytes);
+  return bytes;
+}
+var safeEqual = (a, b) => {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+};
+var fail3 = (json, status, code, message) => json(status, { success: false, error: { code, message } });
+var internalUrl = (path, search = "") => `https://watch-room.internal${path}${search}`;
+var handleWatchRoomRoute = async (deps) => {
+  const { request, namespace, json } = deps;
+  const url = new URL(request.url);
+  const action = url.pathname.replace(/\/+$/, "").split("/").pop() || "";
+  const method = request.method.toUpperCase();
+  if (!namespace || typeof namespace.idFromName !== "function") {
+    return fail3(json, 503, "WATCH_ROOM_UNAVAILABLE", "Worker \u4E0A\u8FD8\u6CA1\u6709\u63A5\u597D INSTANT_TICK\uFF08Durable Object\uFF09\uFF0C\u653E\u6620\u5BA4\u5F00\u4E0D\u4E86\u3002\u53BB\u8BBE\u7F6E\u91CC\u518D\u70B9\u4E00\u6B21\u300C\u66F4\u65B0 Worker\u300D\u3002");
+  }
+  const stubFor = (code) => namespace.get(namespace.idFromName(`${WATCH_ROOM_INSTANCE_PREFIX}${code}`));
+  if (action === "create") {
+    if (method !== "POST") return fail3(json, 405, "METHOD_NOT_ALLOWED", "/watch-room/create \u53EA\u63A5\u53D7 POST");
+    if (!await deps.checkClientToken(request)) return fail3(json, 401, "INVALID_CLIENT_TOKEN", "\u5171\u4EAB\u5BC6\u94A5\u65E0\u6548\u6216\u7F3A\u5931");
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = generateWatchCode();
+      const secret = generateWatchSecret();
+      const res = await stubFor(code).fetch(new Request(internalUrl("/init"), {
+        method: "POST",
+        body: JSON.stringify({ secret })
+      }));
+      if (res.status === 200) {
+        return json(200, { success: true, data: { code, secret, pairOpenUntil: Date.now() + WATCH_PAIR_WINDOW_MS } });
+      }
+      if (res.status !== 409) return fail3(json, 500, "WATCH_ROOM_CREATE_FAILED", `\u5EFA\u653E\u6620\u5BA4\u5931\u8D25\uFF08HTTP ${res.status}\uFF09`);
+    }
+    return fail3(json, 500, "WATCH_ROOM_CREATE_FAILED", "\u8FDE\u7EED\u4E94\u6B21\u914D\u5BF9\u7801\u90FD\u649E\u4E86\uFF0C\u7A0D\u540E\u518D\u8BD5");
+  }
+  if (action === "pair") {
+    if (method !== "POST") return fail3(json, 405, "METHOD_NOT_ALLOWED", "/watch-room/pair \u53EA\u63A5\u53D7 POST");
+    let body = null;
+    try {
+      body = await request.json();
+    } catch {
+    }
+    const code = normalizeWatchCode(body?.code);
+    if (!code) return fail3(json, 400, "BAD_CODE", "\u914D\u5BF9\u7801\u662F 6 \u4F4D\u5B57\u6BCD\u548C\u6570\u5B57");
+    const res = await stubFor(code).fetch(new Request(internalUrl("/pair"), { method: "POST" }));
+    const data = await res.json().catch(() => null);
+    if (res.status === 200 && data?.secret) return json(200, { success: true, data: { code, secret: data.secret } });
+    if (res.status === 404) return fail3(json, 404, "ROOM_NOT_FOUND", "\u6CA1\u6709\u8FD9\u4E2A\u914D\u5BF9\u7801\u3002\u770B\u770B\u624B\u673A\u4E0A\u7684\u7801\u6709\u6CA1\u6709\u6572\u9519");
+    return fail3(json, 410, "PAIR_CLOSED", "\u8FD9\u4E2A\u914D\u5BF9\u7801\u5DF2\u7ECF\u7528\u8FC7\u6216\u8005\u8FC7\u671F\u4E86\uFF0810 \u5206\u949F\uFF09\u3002\u5728\u624B\u673A\u4E0A\u91CD\u65B0\u70B9\u4E00\u6B21\u300C\u914D\u5BF9\u7535\u8111\u300D");
+  }
+  if (action === "ws" || action === "report") {
+    const params = action === "ws" ? url.searchParams : null;
+    let code;
+    let secret;
+    let forward;
+    if (action === "ws") {
+      if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+        return fail3(json, 426, "UPGRADE_REQUIRED", "\u8FD9\u4E2A\u5730\u5740\u8981\u7528 WebSocket \u8FDE");
+      }
+      code = normalizeWatchCode(params.get("room"));
+      secret = params.get("secret");
+      const role = parseWatchRole(params.get("role"));
+      if (!code || typeof secret !== "string" || !role) return fail3(json, 400, "BAD_PARAMS", "room / secret / role \u7F3A\u4E00\u4E0D\u53EF");
+      forward = new Request(internalUrl("/ws", `?secret=${encodeURIComponent(secret)}&role=${role}`), request);
+    } else {
+      if (method !== "POST") return fail3(json, 405, "METHOD_NOT_ALLOWED", "/watch-room/report \u53EA\u63A5\u53D7 POST");
+      const text = await request.text();
+      if (text.length > WATCH_MAX_MESSAGE_CHARS) return fail3(json, 413, "TOO_LARGE", "\u6D88\u606F\u592A\u5927");
+      let body = null;
+      try {
+        body = JSON.parse(text);
+      } catch {
+      }
+      code = normalizeWatchCode(body?.room);
+      secret = body?.secret;
+      if (!code || typeof secret !== "string" || !body?.payload || typeof body.payload !== "object") {
+        return fail3(json, 400, "BAD_PARAMS", "room / secret / payload \u7F3A\u4E00\u4E0D\u53EF");
+      }
+      forward = new Request(internalUrl("/report"), { method: "POST", body: JSON.stringify({ secret, payload: body.payload }) });
+    }
+    const res = await stubFor(code).fetch(forward);
+    if (res.status === 101) return res;
+    if (res.status === 200) return json(200, { success: true });
+    if (res.status === 403) return fail3(json, 403, "BAD_SECRET", "\u623F\u95F4\u5BC6\u94A5\u5BF9\u4E0D\u4E0A\u3002\u91CD\u65B0\u914D\u5BF9\u4E00\u6B21");
+    if (res.status === 404) return fail3(json, 404, "ROOM_NOT_FOUND", "\u653E\u6620\u5BA4\u4E0D\u5B58\u5728\u4E86\u3002\u91CD\u65B0\u914D\u5BF9\u4E00\u6B21");
+    return fail3(json, res.status, "WATCH_ROOM_ERROR", `\u653E\u6620\u5BA4\u51FA\u9519\uFF08HTTP ${res.status}\uFF09`);
+  }
+  return fail3(json, 404, "NOT_FOUND", "\u6CA1\u6709\u8FD9\u4E2A\u653E\u6620\u5BA4\u63A5\u53E3");
+};
+var sendSafe = (ws, text) => {
+  try {
+    ws.send(text);
+  } catch {
+  }
+};
+var presence = (ctx, except) => JSON.stringify({
+  type: "presence",
+  phone: ctx.getWebSockets("phone").filter((ws) => ws !== except).length,
+  screen: ctx.getWebSockets("screen").filter((ws) => ws !== except).length,
+  at: Date.now()
+});
+var broadcast = (ctx, text, except) => {
+  for (const ws of ctx.getWebSockets()) if (ws !== except) sendSafe(ws, text);
+};
+var handleWatchRoomDoFetch = async (state, request) => {
+  const ctx = state;
+  const url = new URL(request.url);
+  const room = await ctx.storage.get(ROOM_KEY);
+  if (url.pathname === "/init") {
+    if (room) return new Response("exists", { status: 409 });
+    const { secret } = await request.json();
+    const now = Date.now();
+    await ctx.storage.put(ROOM_KEY, { secret, createdAt: now, pairOpenUntil: now + WATCH_PAIR_WINDOW_MS });
+    return new Response("ok");
+  }
+  if (!room) return new Response("not found", { status: 404 });
+  if (url.pathname === "/pair") {
+    if (room.pairedAt || Date.now() > room.pairOpenUntil) return new Response("closed", { status: 410 });
+    await ctx.storage.put(ROOM_KEY, { ...room, pairedAt: Date.now(), pairOpenUntil: 0 });
+    return Response.json({ secret: room.secret });
+  }
+  if (url.pathname === "/report") {
+    const { secret, payload } = await request.json();
+    if (!safeEqual(secret, room.secret)) return new Response("bad secret", { status: 403 });
+    const message = { ...payload, type: "player", at: Date.now() };
+    await ctx.storage.put(PLAYER_KEY, message);
+    broadcast(ctx, JSON.stringify(message));
+    return new Response("ok");
+  }
+  if (url.pathname === "/ws") {
+    const secret = url.searchParams.get("secret") || "";
+    const role = parseWatchRole(url.searchParams.get("role"));
+    if (!role) return new Response("bad role", { status: 400 });
+    if (!safeEqual(secret, room.secret)) return new Response("bad secret", { status: 403 });
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    ctx.acceptWebSocket(server, [role]);
+    const lastPlayer = await ctx.storage.get(PLAYER_KEY);
+    if (lastPlayer) sendSafe(server, JSON.stringify(lastPlayer));
+    broadcast(ctx, presence(ctx));
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  return new Response("not found", { status: 404 });
+};
+var handleWatchRoomDoMessage = (state, ws, message) => {
+  const ctx = state;
+  if (typeof message !== "string" || message.length > WATCH_MAX_MESSAGE_CHARS) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(message);
+  } catch {
+    return;
+  }
+  if (!parsed || typeof parsed !== "object") return;
+  if (parsed.type === "ping") {
+    sendSafe(ws, JSON.stringify({ type: "pong", at: Date.now() }));
+    return;
+  }
+  const from = parseWatchRole(ctx.getTags(ws)[0]);
+  if (!from) return;
+  const to = from === "phone" ? "screen" : "phone";
+  const text = JSON.stringify({ ...parsed, from });
+  for (const peer of ctx.getWebSockets(to)) sendSafe(peer, text);
+};
+var handleWatchRoomDoClose = (state, ws) => {
+  const ctx = state;
+  try {
+    ws.close(1e3, "bye");
+  } catch {
+  }
+  const text = presence(ctx, ws);
+  for (const peer of ctx.getWebSockets()) if (peer !== ws) sendSafe(peer, text);
+};
+
 // worker/amsg/src/index.ts
 var getFireStash = (scratch) => scratch?.fire;
 var laterOf = (a, b) => a == null ? b : b == null ? a : Math.max(a, b);
@@ -16663,7 +16865,7 @@ var amsgHooks = {
       throw fireStateError("task metadata \u7F3A charId", { taskId: ctx.task.id });
     }
     const instant = isInstantChatTask(ctx.task.metadata ?? {});
-    const fail3 = (reason, extra) => {
+    const fail4 = (reason, extra) => {
       if (instant && typeof ctx.task.uuid === "string" && ctx.task.uuid) {
         if (typeof ctx.writeState === "function") {
           void writeChatFail(ctx.writeState, charId, {
@@ -16685,7 +16887,7 @@ var amsgHooks = {
       try {
         return await unpackStateValue(value);
       } catch (error) {
-        throw fail3(`${label} \u89E3\u538B\u5931\u8D25\uFF08\u6570\u636E\u635F\u574F\uFF09`, { error: String(error) });
+        throw fail4(`${label} \u89E3\u538B\u5931\u8D25\uFF08\u6570\u636E\u635F\u574F\uFF09`, { error: String(error) });
       }
     };
     const taskMeta = ctx.task.metadata ?? {};
@@ -16697,13 +16899,13 @@ var amsgHooks = {
     if (taskKind) {
       const handler = FIRE_KIND_HANDLERS[taskKind];
       if (!handler) {
-        throw fail3(`\u4E0D\u8BA4\u8BC6\u7684\u4EFB\u52A1\u79CD\u7C7B amsgKind=${taskKind}\uFF08worker \u4EE3\u7801\u6BD4\u524D\u7AEF\u65E7\uFF0C\u53BB\u8BBE\u7F6E\u9875\u91CD\u65B0\u90E8\u7F72\u4E00\u6B21\uFF09`);
+        throw fail4(`\u4E0D\u8BA4\u8BC6\u7684\u4EFB\u52A1\u79CD\u7C7B amsgKind=${taskKind}\uFF08worker \u4EE3\u7801\u6BD4\u524D\u7AEF\u65E7\uFF0C\u53BB\u8BBE\u7F6E\u9875\u91CD\u65B0\u90E8\u7F72\u4E00\u6B21\uFF09`);
       }
       let plan;
       try {
         plan = await handler.beforeFire({ ctx, charId, taskMeta });
       } catch (error) {
-        throw fail3(error instanceof Error ? error.message : String(error), { kind: taskKind });
+        throw fail4(error instanceof Error ? error.message : String(error), { kind: taskKind });
       }
       if ("skip" in plan) {
         console.log("[amsg:kind-skip]", { taskId: ctx.task.id, kind: taskKind, reason: plan.reason });
@@ -16719,14 +16921,14 @@ var amsgHooks = {
     const limitsRecord = parseAmsgLimitsRecord(charRows.find((r) => r.key === AMSG_LIMITS_KEY)?.value);
     const recordLimits = resolveAmsgLimits(limitsRecord);
     const policy = selfScheduled && taskPolicy === "force" && !recordLimits.allowSelfForce ? "expire" : taskPolicy;
-    const presence = parseAmsgChatPresence(
+    const presence2 = parseAmsgChatPresence(
       charRows.find((r) => r.key === AMSG_CHAT_PRESENCE_KEY)?.value
     );
-    if (!instant && policy === "expire" && isFreshChatPresence(presence, charId, ctx.now.getTime())) {
+    if (!instant && policy === "expire" && isFreshChatPresence(presence2, charId, ctx.now.getTime())) {
       console.log("[amsg:expire-skip]", {
         taskId: ctx.task.id,
         reason: "active-chat-presence",
-        presenceActiveAt: presence?.activeAt
+        presenceActiveAt: presence2?.activeAt
       });
       await recordSkip(
         ctx,
@@ -16737,14 +16939,14 @@ var amsgHooks = {
       return { skip: true };
     }
     const packRow = charRows.find((r) => r.key === AMSG_FIRE_PACK_KEY);
-    if (!packRow) throw fail3("\u4E91\u7AEF\u6CA1\u6709\u8FD9\u4E2A\u89D2\u8272\u7684 fire_pack");
+    if (!packRow) throw fail4("\u4E91\u7AEF\u6CA1\u6709\u8FD9\u4E2A\u89D2\u8272\u7684 fire_pack");
     const packJson = await unpackOrFail("fire_pack", packRow.value);
     const pack = parseFirePack(packJson);
-    if (!pack) throw fail3(`fire_pack \u89E3\u6790\u5931\u8D25\uFF1A${describeFirePackVersion(packJson)}`);
+    if (!pack) throw fail4(`fire_pack \u89E3\u6790\u5931\u8D25\uFF1A${describeFirePackVersion(packJson)}`);
     const legacyUnanswered = pack.maxUnansweredSends;
     const limits = limitsRecord || legacyUnanswered === void 0 ? recordLimits : { ...recordLimits, maxUnansweredSends: resolveMaxUnansweredSends(legacyUnanswered) };
     if (instant && !pack.chat) {
-      throw fail3("\u5373\u65F6\u5BF9\u8BDD\u4EFB\u52A1\u7684 fire_pack \u91CC\u6CA1\u6709 chat \u6BB5\uFF08\u4E91\u7AEF\u72B6\u6001\u6CA1\u8DDF\u4E0A\uFF09");
+      throw fail4("\u5373\u65F6\u5BF9\u8BDD\u4EFB\u52A1\u7684 fire_pack \u91CC\u6CA1\u6709 chat \u6BB5\uFF08\u4E91\u7AEF\u72B6\u6001\u6CA1\u8DDF\u4E0A\uFF09");
     }
     if (!instant && pack.template === AMSG2_INSTANT_STUB_TEMPLATE) {
       console.warn("[amsg:fire-pack-stub] fire_pack \u8FD8\u662F\u5373\u65F6\u5BF9\u8BDD\u7684\u5360\u4F4D\u6A21\u677F\uFF0C\u7B49\u5BA2\u6237\u7AEF\u8865\u4F20\u540E\u91CD\u8BD5", {
@@ -16755,9 +16957,9 @@ var amsgHooks = {
     }
     const occurrenceMs = Date.parse(String(ctx.task.nextSendAt));
     if (!Number.isFinite(occurrenceMs)) {
-      throw fail3("\u4EFB\u52A1\u884C next_send_at \u89E3\u6790\u4E0D\u51FA\u89E6\u53D1\u65F6\u523B", { nextSendAt: ctx.task.nextSendAt });
+      throw fail4("\u4EFB\u52A1\u884C next_send_at \u89E3\u6790\u4E0D\u51FA\u89E6\u53D1\u65F6\u523B", { nextSendAt: ctx.task.nextSendAt });
     }
-    const presenceLastUserMessageAt = presence?.charId === charId ? presence.lastUserMessageAt : null;
+    const presenceLastUserMessageAt = presence2?.charId === charId ? presence2.lastUserMessageAt : null;
     const expireInput = {
       policy,
       lastUserMessageAt: laterOf(pack.lastUserMessageAt ?? null, presenceLastUserMessageAt),
@@ -16779,17 +16981,17 @@ var amsgHooks = {
     }
     if (!instant) console.log("[amsg:expire-pass]", expireTrace);
     if (!instant && typeof taskMeta.amsgTaskInstruction !== "string") {
-      throw fail3("\u4EFB\u52A1 metadata \u7F3A amsgTaskInstruction\uFF08\u65E7\u683C\u5F0F\u4EFB\u52A1\uFF09");
+      throw fail4("\u4EFB\u52A1 metadata \u7F3A amsgTaskInstruction\uFF08\u65E7\u683C\u5F0F\u4EFB\u52A1\uFF09");
     }
     const globalRows = await ctx.readState(AMSG_GLOBAL_NAMESPACE);
     const toolPackRow = charRows.find((r) => r.key === AMSG_TOOL_PACK_KEY);
     const toolConfigRow = globalRows.find((r) => r.key === AMSG_TOOL_CONFIG_KEY);
-    if (!toolPackRow) throw fail3("\u4E91\u7AEF\u6CA1\u6709\u8FD9\u4E2A\u89D2\u8272\u7684 tool_pack");
-    if (!toolConfigRow) throw fail3("\u4E91\u7AEF\u6CA1\u6709 tool_config");
+    if (!toolPackRow) throw fail4("\u4E91\u7AEF\u6CA1\u6709\u8FD9\u4E2A\u89D2\u8272\u7684 tool_pack");
+    if (!toolConfigRow) throw fail4("\u4E91\u7AEF\u6CA1\u6709 tool_config");
     const toolPack = parseToolPack(await unpackOrFail("tool_pack", toolPackRow.value));
-    if (!toolPack) throw fail3("tool_pack \u89E3\u6790\u5931\u8D25\uFF08\u683C\u5F0F\u4E0D\u5BF9\u6216\u6570\u636E\u635F\u574F\uFF09");
+    if (!toolPack) throw fail4("tool_pack \u89E3\u6790\u5931\u8D25\uFF08\u683C\u5F0F\u4E0D\u5BF9\u6216\u6570\u636E\u635F\u574F\uFF09");
     const toolConfig = parseToolConfig(await unpackOrFail("tool_config", toolConfigRow.value));
-    if (!toolConfig) throw fail3("tool_config \u89E3\u6790\u5931\u8D25\uFF08\u683C\u5F0F\u4E0D\u5BF9\u6216\u6570\u636E\u635F\u574F\uFF09");
+    if (!toolConfig) throw fail4("tool_config \u89E3\u6790\u5931\u8D25\uFF08\u683C\u5F0F\u4E0D\u5BF9\u6216\u6570\u636E\u635F\u574F\uFF09");
     const mcpServers = filterMcpServersForChar(toolConfig.mcpServers, charId);
     const mcpResolve = mcpServers.length ? buildMcpNameMap(mcpServers, { maxNameLen: MCP_FIRE_NAME_BUDGET }) : null;
     const mcpNative = toolConfig.mcpUseNativeTools !== false;
@@ -16804,7 +17006,7 @@ var amsgHooks = {
         return { skip: true };
       }
       if (typeof ctx.scheduleTask !== "function") {
-        throw fail3("\u5F53\u524D worker \u4E0D\u652F\u6301\u81EA\u7136\u4E3B\u52A8\u7684\u7EED\u6392\u80FD\u529B\uFF0C\u8BF7\u91CD\u65B0\u90E8\u7F72\u6700\u65B0\u7248 Worker");
+        throw fail4("\u5F53\u524D worker \u4E0D\u652F\u6301\u81EA\u7136\u4E3B\u52A8\u7684\u7EED\u6392\u80FD\u529B\uFF0C\u8BF7\u91CD\u65B0\u90E8\u7F72\u6700\u65B0\u7248 Worker");
       }
       const seedText = `${charId}|${occurrenceMs}`;
       let seed = 2166136261;
@@ -16900,7 +17102,7 @@ var amsgHooks = {
         await noteCheck(false, "unanswered-limit");
         return { skip: true };
       }
-      if (isFreshChatPresence(presence, charId, ctx.now.getTime())) {
+      if (isFreshChatPresence(presence2, charId, ctx.now.getTime())) {
         console.log("[amsg:natural-skip]", { taskId: ctx.task.id, charId, reason: "active-chat-presence" });
         await noteCheck(false, "active-chat-presence");
         return { skip: true };
@@ -17708,6 +17910,22 @@ var InstantTickDO = class extends DurableObject {
     if (await this.ctx.storage.getAlarm() !== null) return;
     await this.ctx.storage.setAlarm(Date.now());
   }
+  /**
+   * 影院放映室（实例名 `watch:<配对码>`）走的是 fetch + WebSocket，跟上面的起跳器
+   * 各用各的实例、互不相干。复用这个类是为了不碰 DO migration，见 watchRoom.ts 开头。
+   */
+  async fetch(request) {
+    return handleWatchRoomDoFetch(this.ctx, request);
+  }
+  async webSocketMessage(ws, message) {
+    handleWatchRoomDoMessage(this.ctx, ws, message);
+  }
+  async webSocketClose(ws) {
+    handleWatchRoomDoClose(this.ctx, ws);
+  }
+  async webSocketError(ws) {
+    handleWatchRoomDoClose(this.ctx, ws);
+  }
   /** 独立 invocation，15 分钟墙钟。跑挂了不重设 alarm——下一分钟的 cron 会接着捡。 */
   async alarm() {
     const uuid = await this.ctx.storage.get(INSTANT_TICK_UUID_KEY);
@@ -17796,6 +18014,8 @@ var src_default = {
           incomingCall: true,
           // 这份代码认不认角色对用户消息的 emoji 反应 directive；纯反应也会投递可读横幅。
           messageReactions: true,
+          // 影院放映室中转（/watch-room/*，见 watchRoom.ts）。真能不能用还要看 instantTick。
+          watchRoom: true,
           workerVersion: AMSG_BUNDLE_VERSION
         }
       });
@@ -17906,6 +18126,19 @@ var src_default = {
           error: { code: "TICK_REPORT_FAILED", message: cause.message ? `${cause.name}: ${cause.message}` : cause.name }
         });
       }
+    }
+    if (pathname.includes("/watch-room/")) {
+      if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
+      return handleWatchRoomRoute({
+        request,
+        namespace: env.INSTANT_TICK,
+        checkClientToken: async (req) => {
+          const token = env.AMSG_SERVER_TOKEN?.trim() ?? "";
+          const clientToken = req.headers.get("X-Client-Token") ?? "";
+          return !token || !!clientToken && await constantTimeEqual2(clientToken, token);
+        },
+        json: jsonWithCors
+      });
     }
     if (pathname.endsWith("/instant-chat")) {
       if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
