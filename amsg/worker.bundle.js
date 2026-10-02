@@ -8319,7 +8319,7 @@ function createSingleUserCloudflareWorker(buildConfig, options = {}) {
 }
 
 // utils/amsgBundleVersion.ts
-var AMSG_BUNDLE_VERSION = "2026-10-03";
+var AMSG_BUNDLE_VERSION = "2026-10-03.2";
 
 // utils/amsgTaskKinds.ts
 var AMSG_TASK_KIND_KEY = "amsgKind";
@@ -10990,6 +10990,9 @@ try {
 } catch {
 }
 
+// utils/memoryPalace/maintenanceMode.ts
+var queue = Promise.resolve();
+
 // utils/safeApi.ts
 var log = makeDebugLogger("api", "SafeAPI");
 
@@ -11684,6 +11687,7 @@ var LUNAR_FESTIVAL_DATES = {
   "2035-09-16": "\u4E2D\u79CB\u8282",
   "2035-10-09": "\u91CD\u9633\u8282"
 };
+var lunarFestivalOn = (date) => LUNAR_FESTIVAL_DATES[date];
 var checkSpecialDates = (tz, nowMs) => {
   const now = nowInTimeZone(tz, nowMs == null ? void 0 : new Date(nowMs));
   const monthDay = `${(now.getMonth() + 1).toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`;
@@ -12118,8 +12122,46 @@ function insertUserHolidayInProfile(prompt, reminder) {
 `) : `${prompt}
 
 ### \u4E92\u52A8\u5BF9\u8C61\u4FE1\u606F\u8865\u5145
-${reminder}
+${reminder.includes("\n- ") ? `- ${reminder}` : reminder}
 `;
+}
+var joinHolidayLines = (...lines) => lines.filter(Boolean).join("\n- ");
+var LUNAR_LABELS = {
+  \u9664\u5915: "\u519C\u5386\u9664\u5915",
+  \u6625\u8282: "\u519C\u5386\u6B63\u6708\u521D\u4E00",
+  \u5143\u5BB5\u8282: "\u519C\u5386\u6B63\u6708\u5341\u4E94",
+  \u7AEF\u5348\u8282: "\u519C\u5386\u4E94\u6708\u521D\u4E94",
+  \u4E03\u5915: "\u519C\u5386\u4E03\u6708\u521D\u4E03",
+  \u4E2D\u79CB\u8282: "\u519C\u5386\u516B\u6708\u5341\u4E94",
+  \u91CD\u9633\u8282: "\u519C\u5386\u4E5D\u6708\u521D\u4E5D"
+};
+var SOLAR_FESTIVALS = { "01-01": "\u5143\u65E6", "05-01": "\u52B3\u52A8\u8282", "10-01": "\u56FD\u5E86\u8282" };
+function solarTermDay(year, c) {
+  const y = year % 100;
+  return Math.floor(y * 0.2422 + c) - Math.floor(y / 4);
+}
+function chineseFestivals(date) {
+  if (!validDate(date)) return [];
+  const out = [];
+  const year = Number(date.slice(0, 4)), md = date.slice(5);
+  if (SOLAR_FESTIVALS[md]) out.push({ name: SOLAR_FESTIVALS[md] });
+  if (year >= 2001 && year <= 2099) {
+    if (md === `04-0${solarTermDay(year, 4.81)}`) out.push({ name: "\u6E05\u660E\u8282" });
+    if (md === `12-${solarTermDay(year, 21.94)}`) out.push({ name: "\u51AC\u81F3" });
+  }
+  const lunar = lunarFestivalOn(date);
+  if (lunar) out.push({ name: lunar, lunar: LUNAR_LABELS[lunar] });
+  return out;
+}
+function renderHomeFestival(config, date, homeDays, userName, locationLine = "") {
+  const home = config.homeCountryCode;
+  if (!home) return "";
+  const festivals = home === "CN" ? chineseFestivals(date) : homeDays.filter((d) => d.date === date && !d.regions).map((d) => ({ name: cleanName(d.name) }));
+  const fresh = festivals.filter((f, i) => f.name && !locationLine.includes(f.name) && festivals.findIndex((g) => g.name === f.name) === i);
+  if (!fresh.length) return "";
+  const person = cleanName(userName) || "\u7528\u6237";
+  const lunar = fresh.find((f) => f.lunar)?.lunar;
+  return `${person}\u7684\u5BB6\u4E61${holidayCountryName(home)} ${date}${lunar ? `\uFF08${lunar}\uFF09` : ""}\u662F${fresh.map((f) => f.name).join("\u3001")}\u3002\u8FD9\u662F\u5BB6\u4E61\u7684\u8282\u65E5\uFF0C\u4E0D\u4EE3\u8868${person}\u4ECA\u5929\u653E\u5047\uFF1B\u53EF\u4EE5\u81EA\u7136\u5730\u4E92\u9053\u4E00\u58F0\u8282\u65E5\u95EE\u5019\u3002`;
 }
 async function loadHolidayCalendar(country, year, cache, now = Date.now()) {
   if (!HOLIDAY_COUNTRIES.some((c) => c.countryCode === country) || !Number.isInteger(year) || year < 2e3 || year > 2200) return null;
@@ -12177,7 +12219,16 @@ function renderUserHoliday(config, date, days, userName) {
   return `${person}\u6240\u5728\u5730${holidayCountryName(config.countryCode)}${region} ${date} \u4E3A${names}${working ? "\u8C03\u4F11\u8865\u73ED\u65E5" : "\u516C\u5171\u5047\u671F"}\uFF0C\u5B9E\u9645\u4F11\u606F\u4E0E\u5426\u4EE5${person}\u81EA\u5DF1\u7684\u65E5\u7A0B\u548C\u8BF4\u660E\u4E3A\u51C6\u3002`;
 }
 async function getUserHolidayReminder(config, cache, now = Date.now(), userName) {
-  if (!config?.enabled || !config.countryCode) return "";
+  if (!config?.enabled) return "";
+  const local = nowInTimeZone(config.timeZone, new Date(now));
+  const home = config.homeCountryCode;
+  const [location2, homeCalendar] = await Promise.all([
+    config.countryCode ? getLocationHoliday(config, cache, now, userName) : "",
+    home && home !== "CN" ? loadHolidayCalendar(home, local.getFullYear(), cache, now) : null
+  ]);
+  return joinHolidayLines(location2, renderHomeFestival(config, getLocalDateKey(local), homeCalendar?.days || [], userName, location2));
+}
+async function getLocationHoliday(config, cache, now, userName) {
   const local = nowInTimeZone(config.timeZone, new Date(now));
   const year = local.getFullYear();
   const calendars = await Promise.all([
@@ -15220,6 +15271,24 @@ var buildDuplicateToolMessage = (name) => [
 // worker/amsg/src/index.ts
 init_proxyWorker();
 
+// utils/voiceTextDedup.ts
+function deduplicateVoiceText(text) {
+  if (/\[html\]|<翻[译譯]>|```/i.test(text)) return text;
+  const normalize2 = (s) => s.replace(/[\s\p{P}\p{S}]/gu, "").toLowerCase();
+  const blocks = [];
+  const spoken = [];
+  const protectedText = text.replace(/<[语語]音[^>]*>([\s\S]*?)<\/[语語]音>(?:\s*<字幕>([\s\S]*?)<\/字幕>)?/g, (block, voice, subtitle) => {
+    spoken.push(normalize2(voice), ...subtitle ? [normalize2(subtitle)] : []);
+    return "\nVOICE" + (blocks.push(block) - 1) + "\n";
+  });
+  if (!blocks.length) return text;
+  return protectedText.split(/\r?\n/).filter((line) => {
+    if (/[<>\[\]\u0002]/.test(line)) return true;
+    const plain = normalize2(line);
+    return plain.length < 12 || !spoken.some((voice) => voice.includes(plain));
+  }).join("\n").replace(/\u0002VOICE(\d+)\u0002/g, (_, i) => blocks[Number(i)]).trim();
+}
+
 // node_modules/.pnpm/@rei-standard+amsg-instant@0.11.0-next.6/node_modules/@rei-standard/amsg-instant/dist/index.mjs
 var PUSH_PAYLOAD_BYTE_ENCODER = new TextEncoder();
 function segmentTextWithProtectedBlocks(text, options) {
@@ -15536,7 +15605,7 @@ function sanitizeIntoSegments(text) {
   cleaned = stripInternalAssistantProtocolMarkers(cleaned);
   cleaned = normalizeAssistantEmojiFormatting(cleaned);
   cleaned = stripThinkBlocks(cleaned);
-  cleaned = normalizeVoiceTags(cleaned);
+  cleaned = deduplicateVoiceText(normalizeVoiceTags(cleaned));
   cleaned = normalizeTranslationTags(cleaned);
   const ATOM_MARKER = String.fromCharCode(2);
   const atomBlocks = [];
