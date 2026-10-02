@@ -8319,7 +8319,7 @@ function createSingleUserCloudflareWorker(buildConfig, options = {}) {
 }
 
 // utils/amsgBundleVersion.ts
-var AMSG_BUNDLE_VERSION = "2026-10-03.2";
+var AMSG_BUNDLE_VERSION = "2026-10-03.3";
 
 // utils/amsgTaskKinds.ts
 var AMSG_TASK_KIND_KEY = "amsgKind";
@@ -18117,6 +18117,7 @@ var amsgHooks = {
     const stash = {
       session: createFireSessionState(),
       toolCtx,
+      contactDisplayName: toolPack.charDisplayName?.trim() || void 0,
       proxyWorkerUrl,
       xhsCookie,
       occurrenceMs,
@@ -18334,7 +18335,8 @@ ${buildNaturalReplyGuidance(
         // ctx.contactName 是排程那一刻冻进任务行的快照，用户改完名字之后，之前排的
         // 任务推送出来横幅还顶着旧名字（上游 update-message 也不让改这个字段）。
         // tool_pack 里没名字时退回任务行那份，别让标题变成「来自 」。
-        contactName: stash.toolCtx.char.name || ctx.contactName,
+        // 本 fork：设了备注就用备注当横幅标题（只是显示，角色提示词里仍是真名）
+        contactName: stash.contactDisplayName || stash.toolCtx.char.name || ctx.contactName,
         avatarUrl: ctx.avatarUrl ?? null,
         taskId,
         messageType,
