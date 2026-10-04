@@ -11202,6 +11202,7 @@ var naturalCheckWindowMinutes = (intensity, random01) => {
 };
 var nextNaturalCheckAt = (occurrenceMs, nowMs, nextCheckMinutes) => Math.max(occurrenceMs, nowMs) + Math.max(1, nextCheckMinutes) * 6e4;
 var clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+var NATURAL_PROFILE_AUTO_REFRESH_MS = 24 * 60 * 60 * 1e3;
 var hourInZone = (nowMs, tzId) => {
   const hour = new Intl.DateTimeFormat("en-US", { timeZone: tzId, hour: "2-digit", hour12: false }).formatToParts(new Date(nowMs)).find((p) => p.type === "hour")?.value;
   const parsed = Number(hour);
