@@ -10076,6 +10076,7 @@ var parseCallJobInput = (raw) => {
   const autoHangupAt = row.autoHangupAt == null ? null : parsePositiveNumber(row.autoHangupAt);
   if (row.autoHangupAt != null && autoHangupAt == null) return null;
   const dreamIndex = typeof row.dreamIndex === "number" && Number.isSafeInteger(row.dreamIndex) && row.dreamIndex >= 0 ? row.dreamIndex : void 0;
+  const dreamChance = typeof row.dreamChance === "number" && Number.isFinite(row.dreamChance) && row.dreamChance >= 0 && row.dreamChance <= 100 ? row.dreamChance : void 0;
   return {
     v: 1,
     charId: row.charId,
@@ -10088,6 +10089,7 @@ var parseCallJobInput = (raw) => {
     ...sourceUserMessageId ? { sourceUserMessageId } : {},
     autoHangupAt,
     ...dreamIndex !== void 0 ? { dreamIndex } : {},
+    ...dreamChance !== void 0 ? { dreamChance } : {},
     createdAt
   };
 };
@@ -10406,7 +10408,8 @@ var buildHandler = (kind) => ({
       await discardJob2(ctx.writeState, jobId);
       return { skip: true, reason: "sleep-auto-hangup-reached" };
     }
-    if (job.phase === "dream" && hash32(`${jobId}|${job.dreamIndex ?? 0}`) % 100 >= 25) {
+    const dreamChance = typeof job.dreamChance === "number" ? job.dreamChance : 25;
+    if (job.phase === "dream" && hash32(`${jobId}|${job.dreamIndex ?? 0}`) % 100 >= dreamChance) {
       await discardJob2(ctx.writeState, jobId);
       return { skip: true, reason: "sleep-dream-chance-missed" };
     }
@@ -19165,6 +19168,9 @@ var src_default = {
           // 后台任务基础设施先于通话/陪睡任务上线。单独报这一位，避免只有旧的
           // plate handler 的 Worker 被新前端误认为能接收 call-reply / sleep-dream。
           callBackgroundJobs: true,
+          // 梦话 job 认 dreamChance（前台已抽好签，传 100 就必说）。没有这一位的老 Worker
+          // 仍按 25% 再抽一次，前台据此决定要不要多排几句兜底。
+          sleepDreamPlan: true,
           // 见面普通回复使用独立的 date-reply handler，必须单独回显能力位；旧 Worker
           // 即使已有通话后台，也不能接收见面 prompt 快照。
           dateBackgroundJobs: true,
