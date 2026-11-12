@@ -11951,7 +11951,7 @@ function createSingleUserCloudflareWorker(buildConfig, options = {}) {
 }
 
 // utils/amsgBundleVersion.ts
-var AMSG_BUNDLE_VERSION = "2026-10-12.1";
+var AMSG_BUNDLE_VERSION = "2026-11-12.1";
 
 // utils/amsgTaskKinds.ts
 var AMSG_TASK_KIND_KEY = "amsgKind";
@@ -19543,6 +19543,34 @@ var handleWatchRoomDoClose = (state, ws) => {
   for (const peer of ctx.getWebSockets()) if (peer !== ws) sendSafe(peer, text2);
 };
 
+// worker/amsg/src/heavyRequestDo.ts
+var HEAVY_FORWARDED_HEADER = "X-Sully-Heavy-Forwarded";
+var isHeavyRoute = (pathname, method) => method === "PUT" && pathname.endsWith("/client-state") || method === "POST" && pathname.endsWith("/instant-chat");
+var isForwardedHeavyRequest = (request) => request.headers.get(HEAVY_FORWARDED_HEADER) === "1";
+var resolveHeavyStub = (namespace, request) => {
+  const ns = namespace;
+  if (!ns || typeof ns.idFromName !== "function" || typeof ns.get !== "function") return null;
+  const userId = request.headers.get("X-User-Id")?.trim() || "anon";
+  const stub = ns.get(ns.idFromName(`heavy:${userId}`));
+  return stub && typeof stub.fetch === "function" ? stub.fetch.bind(stub) : null;
+};
+var forwardHeavyRequest = async (request, namespace, json) => {
+  const doFetch = resolveHeavyStub(namespace, request);
+  if (!doFetch) return null;
+  const headers = new Headers(request.headers);
+  headers.set(HEAVY_FORWARDED_HEADER, "1");
+  try {
+    return await doFetch(new Request(request, { headers }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[amsg:heavy] \u8F6C\u8FDB Durable Object \u5931\u8D25", message);
+    return json(503, {
+      success: false,
+      error: { code: "HEAVY_FORWARD_FAILED", message: `\u5927\u5305\u8BF7\u6C42\u8F6C\u4EA4\u540E\u53F0\u5904\u7406\u5931\u8D25\uFF1A${message}` }
+    });
+  }
+};
+
 // worker/amsg/src/index.ts
 var getFireStash = (scratch) => scratch?.fire;
 var REPLY_IN_FLIGHT_DEFER_MS = 45e3;
@@ -21300,6 +21328,7 @@ var InstantTickDO = class extends DurableObject {
    * 各用各的实例、互不相干。复用这个类是为了不碰 DO migration，见 watchRoom.ts 开头。
    */
   async fetch(request) {
+    if (isForwardedHeavyRequest(request)) return amsgWorker.fetch(request, this.env);
     return handleWatchRoomDoFetch(this.ctx, request);
   }
   async webSocketMessage(ws, message) {
@@ -21363,7 +21392,7 @@ var readServerVersion = async (request, env) => {
     return null;
   }
 };
-var src_default = {
+var amsgWorker = {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
     const method = request.method.toUpperCase();
@@ -21375,6 +21404,8 @@ var src_default = {
           ...inspectWorkerEnv(env),
           instantChat: true,
           instantTick: !!env.INSTANT_TICK,
+          // 大包写入（PUT /client-state、POST /instant-chat）挪进 DO 跑，躲开免费计划 10ms CPU（见 ./heavyRequestDo）。
+          heavyRequestsInDo: !!env.INSTANT_TICK,
           // 这份代码认不认识「后台任务」（metadata.amsgKind → handler，见 fireKinds.ts）。
           // 老 bundle 没有这个字段，前端据此不去建那种任务——老 worker 会把它当聊天任务
           // 跑，然后卡在「本次任务指令缺失」终态失败：任务行不在用户的清单里，面板一片
@@ -21533,6 +21564,10 @@ var src_default = {
         error: { code: "WORKER_CONFIG_MISSING", message: report.message, missing: report.missing }
       });
     }
+    if (isHeavyRoute(pathname, method) && !isForwardedHeavyRequest(request)) {
+      const forwarded = await forwardHeavyRequest(request, env.INSTANT_TICK, jsonWithCors);
+      if (forwarded) return forwarded;
+    }
     if (pathname.endsWith("/tick-report")) {
       if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
       if (method !== "GET") {
@@ -21618,6 +21653,7 @@ var src_default = {
     );
   }
 };
+var src_default = amsgWorker;
 export {
   InstantTickDO,
   amsgFireSettled,
